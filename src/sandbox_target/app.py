@@ -1,6 +1,6 @@
 import subprocess
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI, Query
@@ -51,7 +51,7 @@ def execute(cmd: str = Query("", description="Command to execute on server")):
         "cmd": cmd,
         "output": output,
         "error": exc,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     })
 
 
