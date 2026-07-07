@@ -1,7 +1,7 @@
 import ast
+import json
 import shutil
 import sys
-import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,8 +11,14 @@ _proj = Path(__file__).resolve().parents[2]
 if str(_proj) not in sys.path:
     sys.path.insert(0, str(_proj))
 
-from src.agents.contracts import ForensicReport, PatchProposal, VulnType
-
+from src.agents.config import LLMConfig
+from src.agents.contracts import (
+    ForensicReport,
+    PatchProposal,
+    PATCH_ENGINEER_PROMPT,
+    VulnType,
+)
+from src.agents.llm_client import chat, extract_json
 
 SECURE_REPLACEMENTS: dict[str, str] = {
     VulnType.COMMAND_INJECTION: (
@@ -30,10 +36,49 @@ FIX_IMPORTS: dict[str, list[str]] = {
 }
 
 
+def _generate_patch_llm(report: ForensicReport) -> PatchProposal | None:
+    config = LLMConfig()
+    if not config.configured:
+        return None
+
+    user_prompt = (
+        f"Vulnerable file: {report.file}:{report.line}\n\n"
+        f"Vulnerable code:\n"
+        f"```python\n{report.vulnerable_code}\n```\n\n"
+        f"Attack vector: {report.attack_vector}\n\n"
+        f"Output ONLY a raw JSON object matching the PatchProposal schema. "
+        f"The patch_code field must contain ONLY valid Python source code — "
+        f"no markdown, no backticks, no commentary around it. "
+        f"Do not wrap the JSON in backticks or markdown."
+    )
+
+    try:
+        raw = chat(PATCH_ENGINEER_PROMPT, user_prompt, config)
+        cleaned = extract_json(raw)
+        data = json.loads(cleaned)
+        patch = PatchProposal.model_validate(data)
+
+        ok, err = validate_patch_syntax(patch.patch_code)
+        if ok:
+            print(f"[PatchEngine] LLM patch valid (syntax OK)")
+            return patch
+        else:
+            print(f"[PatchEngine] LLM patch syntax error: {err}")
+    except Exception as e:
+        print(f"[PatchEngine] LLM path failed ({e}), falling back")
+
+    return None
+
+
 def generate_patch(report: ForensicReport | dict) -> PatchProposal:
     if isinstance(report, dict):
         report = ForensicReport.model_validate(report)
 
+    llm_patch = _generate_patch_llm(report)
+    if llm_patch is not None:
+        return llm_patch
+
+    print("[PatchEngine] Using deterministic fallback")
     vuln_key = report.vuln_type
     patch_code = SECURE_REPLACEMENTS.get(vuln_key)
     if not patch_code:
@@ -80,7 +125,6 @@ def apply_patch(patch: PatchProposal | dict, backup: bool = True) -> str:
     if orig_code in content:
         content = content.replace(orig_code, patch_code, 1)
     else:
-        # fallback: line-based replacement
         lines = content.splitlines()
         line_idx = patch.target_line - 1
         if 0 <= line_idx < len(lines):
@@ -91,7 +135,6 @@ def apply_patch(patch: PatchProposal | dict, backup: bool = True) -> str:
 
     target.write_text(content, encoding="utf-8")
 
-    # Add necessary imports if missing
     extra_imports = FIX_IMPORTS.get(patch.vuln_type, [])
     if extra_imports:
         content = target.read_text(encoding="utf-8")
@@ -123,8 +166,6 @@ def validate_patch_syntax(patch_code: str) -> tuple[bool, str | None]:
 
 
 if __name__ == "__main__":
-    from src.agents.contracts import LogEntry
-
     sample = ForensicReport(
         report_id="rep-001",
         alert_id="alert-001",

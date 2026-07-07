@@ -127,12 +127,17 @@ Your job is to trace an attack back to its root cause in the source code.
 You receive: an AlertEvent JSON object.
 You must produce: a ForensicReport JSON object.
 
+Calibrate your confidence field as follows:
+  - 0.9+ if logs or stack trace explicitly name the file and line number
+  - 0.7–0.89 if the evidence strongly implies a specific location
+  - 0.5–0.69 if the inference is plausible but unconfirmed
+  - below 0.5 if uncertain
+
 Rules:
 - Identify the exact file path and line number of the vulnerable code.
 - Output ONLY raw JSON matching the ForensicReport schema.
 - No markdown, no backticks, no explanation, no commentary.
 - The output must be parseable by `json.loads()`.
-- Set confidence based on how certain you are this is the true root cause (0.0–1.0).
 """
 
 PATCH_ENGINEER_PROMPT = """\
