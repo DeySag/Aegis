@@ -1,0 +1,61 @@
+import subprocess
+import logging
+from datetime import datetime
+from pathlib import Path
+
+from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
+
+app = FastAPI(title="Server Admin Dashboard")
+
+LOG_DIR = Path(__file__).resolve().parents[2] / "data" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(
+    filename=LOG_DIR / "traffic.log",
+    level=logging.INFO,
+    format="%(asctime)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("sandbox")
+
+
+@app.get("/ping")
+def ping():
+    return {"status": "ok", "service": "server-admin"}
+
+
+@app.get("/execute")
+def execute(cmd: str = Query("", description="Command to execute on server")):
+    logger.info(f"EXECUTE request: cmd={cmd!r}")
+    exc = None
+    output = ""
+    try:
+        result = subprocess.run(
+            cmd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        output = result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        output = "[TIMEOUT] Command exceeded 5 seconds"
+        exc = "timeout"
+    except Exception as e:
+        output = f"[ERROR] {e}"
+        exc = str(e)
+
+    logger.info(f"EXECUTE response: cmd={cmd!r} output={output!r}")
+    return JSONResponse({
+        "cmd": cmd,
+        "output": output,
+        "error": exc,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+    })
+
+
+@app.exception_handler(Exception)
+def global_handler(request, err):
+    logger.error(f"Unhandled exception: {err}")
+    return JSONResponse(status_code=500, content={"error": str(err)})
