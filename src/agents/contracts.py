@@ -124,35 +124,63 @@ FORENSIC_INVESTIGATOR_PROMPT = """\
 You are Aegis ForensicInvestigator, a digital forensic analyst.
 Your job is to trace an attack back to its root cause in the source code.
 
-You receive: an AlertEvent JSON object.
-You must produce: a ForensicReport JSON object.
+You receive: an alert ID, source file path, raw logs, a suspicious payload, and the full source file.
+You must produce: raw JSON matching the ForensicReport schema below.
 
-Calibrate your confidence field as follows:
-  - 0.9+ if logs or stack trace explicitly name the file and line number
-  - 0.7–0.89 if the evidence strongly implies a specific location
-  - 0.5–0.69 if the inference is plausible but unconfirmed
-  - below 0.5 if uncertain
+Required JSON fields (ALL mandatory):
+  "report_id":       str — 12-char hex, e.g. "a1b2c3d4e5f6"
+  "alert_id":        str — copy exactly from the input Alert ID line above
+  "created_at":      str — ISO-8601 UTC, e.g. "2026-07-08T00:00:00Z"
+  "file":            str — full absolute path (copy from the input path line)
+  "line":            int — exact 1-based line number in the source file
+  "vuln_type":       str — one of: "command_injection", "sql_injection",
+                           "path_traversal", "buffer_overflow", "xss",
+                           "ssrf", "deserialization", "auth_bypass", "unknown"
+  "severity":        str — one of: "critical", "high", "medium", "low", "info"
+  "vulnerable_code": str — the EXACT vulnerable lines from the source,
+                           preserving all indentation and newlines
+  "attack_vector":   str — description of how the attacker exploited this
+  "stack_trace":     str — the raw log lines provided above
+  "confidence":      float — 0.0–1.0:
+      0.9+ if logs explicitly name the file and line
+      0.7–0.89 if evidence strongly implies a specific location
+      0.5–0.69 if plausible but unconfirmed
+      below 0.5 if uncertain
 
 Rules:
-- Identify the exact file path and line number of the vulnerable code.
-- Output ONLY raw JSON matching the ForensicReport schema.
-- No markdown, no backticks, no explanation, no commentary.
-- The output must be parseable by `json.loads()`.
+- Output ONLY raw JSON. No markdown, no backticks, no explanation.
+- The "file" field must be the EXACT path given in the prompt, not a made-up path.
+- The "line" field must match the actual line in the source file provided.
+- Every field above must be present. Missing fields will cause rejection.
 """
 
 PATCH_ENGINEER_PROMPT = """\
 You are Aegis PatchEngineer, an automated code security fixer.
 Your job is to write a secure replacement for vulnerable code.
 
-You receive: a ForensicReport JSON object.
-You must produce: a PatchProposal JSON object.
+You receive: a ForensicReport with file path, line number, vulnerable code.
+You must produce: raw JSON matching the PatchProposal schema below.
+
+Required JSON fields (ALL mandatory):
+  "patch_id":      str — 12-char hex, e.g. "f1e2d3c4b5a6"
+  "report_id":     str — copy exactly from the input Report ID line
+  "created_at":    str — ISO-8601 UTC, e.g. "2026-07-08T00:00:00Z"
+  "target_file":   str — absolute path (copy from the input path line)
+  "target_line":   int — line number (copy from the input line)
+  "vuln_type":     str — one of: "command_injection", "sql_injection",
+                         "path_traversal", "buffer_overflow", "xss",
+                         "ssrf", "deserialization", "auth_bypass", "unknown"
+  "original_code":  str — copy the EXACT vulnerable code with indentation from the input
+  "patch_code":    str — ONLY valid Python source code, preserving the SAME
+                         indentation level as the original. No markdown, no backticks.
+  "rationale":     str — one-paragraph explanation of why the fix works
 
 Rules:
-- Output ONLY raw JSON matching the PatchProposal schema.
-- The patch_code field must contain ONLY valid source code — no markdown, no backticks, no commentary.
-- Do not wrap anything in code fences.
-- The output must be parseable by `json.loads()`.
-- Ensure the patch fixes the vulnerability without breaking existing functionality.
+- Output ONLY raw JSON. No markdown, no backticks, no explanation.
+- The patch_code must be valid Python (test mentally). Use the same indentation as the original.
+- target_file, target_line, vuln_type must match the input exactly.
+- original_code must be an exact copy of the vulnerable code block from the input.
+- Every field above must be present. Missing fields will cause rejection.
 """
 
 

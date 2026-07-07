@@ -2,6 +2,7 @@ import ast
 import json
 import shutil
 import sys
+import textwrap
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,36 +37,64 @@ FIX_IMPORTS: dict[str, list[str]] = {
 }
 
 
-def _generate_patch_llm(report: ForensicReport) -> PatchProposal | None:
+def _generate_patch_llm(report: ForensicReport, max_retries: int = 2) -> PatchProposal | None:
     config = LLMConfig()
     if not config.configured:
         return None
 
-    user_prompt = (
-        f"Vulnerable file: {report.file}:{report.line}\n\n"
-        f"Vulnerable code:\n"
-        f"```python\n{report.vulnerable_code}\n```\n\n"
-        f"Attack vector: {report.attack_vector}\n\n"
-        f"Output ONLY a raw JSON object matching the PatchProposal schema. "
-        f"The patch_code field must contain ONLY valid Python source code — "
-        f"no markdown, no backticks, no commentary around it. "
-        f"Do not wrap the JSON in backticks or markdown."
-    )
+    allowed_vuln_types = [
+        "command_injection", "sql_injection", "path_traversal",
+        "buffer_overflow", "xss", "ssrf", "deserialization",
+        "auth_bypass", "unknown",
+    ]
 
-    try:
-        raw = chat(PATCH_ENGINEER_PROMPT, user_prompt, config)
-        cleaned = extract_json(raw)
-        data = json.loads(cleaned)
-        patch = PatchProposal.model_validate(data)
+    vuln_code = report.vulnerable_code
+    last_error: str | None = None
 
-        ok, err = validate_patch_syntax(patch.patch_code)
-        if ok:
-            print(f"[PatchEngine] LLM patch valid (syntax OK)")
-            return patch
-        else:
-            print(f"[PatchEngine] LLM patch syntax error: {err}")
-    except Exception as e:
-        print(f"[PatchEngine] LLM path failed ({e}), falling back")
+    for attempt in range(max_retries + 1):
+        error_hint = ""
+        if last_error:
+            error_hint = (
+                f"\n\nPrevious attempt's syntax error: {last_error}\n"
+                f"Fix the indentation and ensure the code is valid Python."
+            )
+
+        user_prompt = (
+            f"Report ID (copy this into your output's report_id field): {report.report_id}\n\n"
+            f"Vulnerable file: {report.file}:{report.line}\n\n"
+            f"vuln_type must be exactly one of: {allowed_vuln_types}\n"
+            f"(the input report has vuln_type={report.vuln_type.value})\n\n"
+            f"Vulnerable code (use the SAME indentation in your patch):\n"
+            f"```python\n{vuln_code}\n```\n\n"
+            f"Attack vector: {report.attack_vector}\n\n"
+            f"IMPORTANT: Do NOT include import statements in patch_code. "
+            f"Imports are handled separately. Output ONLY the replacement code "
+            f"at the exact same indentation level as the original.\n\n"
+            f"Output ONLY a raw JSON object matching the PatchProposal schema. "
+            f"No markdown, no backticks, no commentary."
+            f"{error_hint}"
+        )
+
+        try:
+            raw = chat(PATCH_ENGINEER_PROMPT, user_prompt, config)
+            cleaned = extract_json(raw)
+            data = json.loads(cleaned)
+            # Inject the actual file/line/vuln_type from the report to avoid copy errors
+            data.setdefault("target_file", report.file)
+            data.setdefault("target_line", report.line)
+            data.setdefault("vuln_type", report.vuln_type.value)
+            patch = PatchProposal.model_validate(data)
+
+            ok, err = validate_patch_syntax(patch.patch_code)
+            if ok:
+                print(f"[PatchEngine] LLM patch valid on attempt {attempt + 1}")
+                return patch
+            else:
+                last_error = err
+                print(f"[PatchEngine] LLM patch syntax error (attempt {attempt + 1}): {err}")
+        except Exception as e:
+            last_error = str(e)
+            print(f"[PatchEngine] LLM path attempt {attempt + 1} failed ({e})")
 
     return None
 
@@ -159,7 +188,9 @@ def trigger_hot_reload(target_file: str):
 
 def validate_patch_syntax(patch_code: str) -> tuple[bool, str | None]:
     try:
-        ast.parse(patch_code)
+        # Dedent so indented replacement code still parses standalone
+        dedented = textwrap.dedent(patch_code)
+        ast.parse(dedented)
         return True, None
     except SyntaxError as e:
         return False, str(e)
