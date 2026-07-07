@@ -26,6 +26,9 @@ Thumbs.db
 .env
 *.env.local
 
+# But keep the example
+!.env.example
+
 # Logs and per-run artifacts
 *.log
 attack_results.json

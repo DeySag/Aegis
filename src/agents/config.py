@@ -1,5 +1,16 @@
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
+
+# Load .env from project root
+_env_path = Path(__file__).resolve().parents[2] / ".env"
+if _env_path.exists():
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(str(_env_path))
+    except ImportError:
+        pass
 
 
 @dataclass
@@ -23,4 +34,4 @@ class LLMConfig:
 
     @property
     def configured(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key) and "your_api_key" not in self.api_key
