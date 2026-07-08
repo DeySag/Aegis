@@ -24,7 +24,7 @@ from src.agents.llm_client import chat, extract_json
 
 SECURE_REPLACEMENTS: dict[str, str] = {
     VulnType.COMMAND_INJECTION: (
-        "result = subprocess.run(\n"
+        "        result = subprocess.run(\n"
         "            shlex.split(cmd),\n"
         "            capture_output=True,\n"
         "            text=True,\n"
@@ -165,29 +165,33 @@ def apply_patch(patch: PatchProposal | dict, backup: bool = True) -> str:
         shutil.copy2(str(target), str(backup_path))
         print(f"[PatchEngine] Backup saved: {backup_path}")
 
-    orig_code = patch.original_code.strip()
-    patch_code = patch.patch_code.strip()
+    content = target.read_text(encoding="utf-8")
 
     lines = content.splitlines()
     line_idx = patch.target_line - 1
     if 0 <= line_idx < len(lines):
+        target_indent = len(lines[line_idx]) - len(lines[line_idx].lstrip())
         # Track paren depth from target line to find end of original block.
         # Handles both single-line (depth=0 at target line) and multi-line
         # (e.g. subprocess.run( ... )) blocks.
         depth = 0
         end_idx = line_idx
         for i in range(line_idx, len(lines)):
-            stripped = lines[i].strip()
-            depth += stripped.count("(") - stripped.count(")")
+            s = lines[i].strip()
+            depth += s.count("(") - s.count(")")
             if depth <= 0:
                 end_idx = i
                 break
         # Remove the original block (target line through closing paren)
         del lines[line_idx:end_idx + 1]
-        # Insert patch code at the same location
-        patch_lines = [""] + patch_code.split("\n")
-        for j, pl in enumerate(patch_lines):
-            lines.insert(line_idx + j, pl)
+        # Normalize patch indentation: dedent to 0, then re-indent to match target
+        raw = patch.patch_code
+        dedented = textwrap.dedent(raw).rstrip()
+        if dedented:
+            indented = textwrap.indent(dedented, " " * target_indent)
+            patch_lines = [""] + indented.split("\n")
+            for j, pl in enumerate(patch_lines):
+                lines.insert(line_idx + j, pl)
     content = "\n".join(lines)
 
     target.write_text(content, encoding="utf-8")
