@@ -31,6 +31,27 @@ from src.sandbox_target.harness import run_sandbox_test
 
 MAX_RETRIES = 2
 
+# ── Source file snapshot for clean-baseline patching ──────
+
+_source_snapshots: dict[str, str] = {}
+_SOURCE_FILES = ["src/sandbox_target/app.py"]
+
+
+def _capture_snapshots() -> None:
+    for rel in _SOURCE_FILES:
+        p = _proj / rel
+        if p.exists():
+            _source_snapshots[rel] = p.read_text(encoding="utf-8")
+
+
+def _restore_snapshots() -> None:
+    if not _source_snapshots:
+        _capture_snapshots()
+    for rel, content in _source_snapshots.items():
+        p = _proj / rel
+        p.write_text(content, encoding="utf-8")
+        print(f"[Pipeline] Restored {rel} from snapshot")
+
 
 def generate_patch_with_retry(
     report: ForensicReport | dict,
@@ -122,6 +143,7 @@ def run_pipeline(
         })
 
     try:
+        _restore_snapshots()
         report, inv_path = investigate(alert, on_event=on_event)
         result["alert_id"] = report.alert_id
         result["report"] = json.loads(serialize(report))
