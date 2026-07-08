@@ -197,6 +197,7 @@ def run_pipeline(
             if on_event:
                 on_event("validate", {
                     "passed": result["test_passed"],
+                    "startup_failed": test_result.get("startup_failed", False),
                     "exploit_count": test_result.get("exploitable_count", 0),
                 })
             if not result["test_passed"]:

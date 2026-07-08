@@ -44,6 +44,7 @@ HTML_PATH = _proj / "aegis_ops.html"
 # ── SSE event bus ─────────────────────────────────────────
 
 event_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+_main_loop: asyncio.AbstractEventLoop | None = None
 alert_count = 0
 patch_count = 0
 loop_running = False
@@ -53,14 +54,14 @@ def emit(stage: str, data: dict[str, Any]) -> None:
     """Thread-safe push into the SSE event queue."""
     data["stage"] = stage
     data["type"] = "log"
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
+    loop = _main_loop
+    if loop is not None and loop.is_running():
         asyncio.run_coroutine_threadsafe(event_queue.put(data), loop)
 
 
 def emit_error(message: str) -> None:
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
+    loop = _main_loop
+    if loop is not None and loop.is_running():
         asyncio.run_coroutine_threadsafe(event_queue.put({
             "type": "error",
             "message": message,
@@ -200,7 +201,8 @@ async def gpu_telemetry_loop() -> None:
 
 @ops_app.on_event("startup")
 async def startup():
-    loop = asyncio.get_running_loop()
+    global _main_loop
+    _main_loop = asyncio.get_running_loop()
 
     # Start the pipeline worker in a thread
     thread = threading.Thread(target=pipeline_worker_loop, daemon=True)

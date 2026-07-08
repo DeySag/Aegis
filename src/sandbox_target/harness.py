@@ -50,6 +50,7 @@ def run_sandbox_test(
 
     result: dict[str, Any] = {
         "passed": False,
+        "startup_failed": False,
         "details": [],
         "errors": [],
         "port": port,
@@ -77,7 +78,8 @@ def run_sandbox_test(
         )
 
         if not wait_for_server(url):
-            result["errors"].append("Sandbox copy failed to start")
+            result["startup_failed"] = True
+            result["errors"].append("Sandbox copy failed to start (syntax error or missing deps)")
             return result
 
         result["details"].append(f"Sandbox started at {url}")

@@ -175,9 +175,22 @@ def apply_patch(patch: PatchProposal | dict, backup: bool = True) -> str:
         lines = content.splitlines()
         line_idx = patch.target_line - 1
         if 0 <= line_idx < len(lines):
-            lines[line_idx] = f"# PATCHED: {lines[line_idx]}"
-            patch_lines = patch_code.split("\n")
-            lines[line_idx:line_idx + 1] = [""] + patch_lines
+            # Find the end of the original multi-line block by tracking
+            # open-parens from the target line through the closing paren.
+            depth = 0
+            end_idx = line_idx
+            for i in range(line_idx, len(lines)):
+                stripped = lines[i].strip()
+                depth += stripped.count("(") - stripped.count(")")
+                if depth <= 0 and stripped.startswith(")"):
+                    end_idx = i
+                    break
+            # Remove the original block
+            del lines[line_idx:end_idx + 1]
+            # Insert patch code at the same location
+            patch_lines = [""] + patch_code.split("\n")
+            for j, pl in enumerate(patch_lines):
+                lines.insert(line_idx + j, pl)
         content = "\n".join(lines)
 
     target.write_text(content, encoding="utf-8")

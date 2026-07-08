@@ -373,10 +373,14 @@ function handleLogEvent(data){
     case 'validate':
       statusText.textContent = 'VALIDATING';
       logLine(`<span class="tag tag-validate">[VALIDATE]</span> isolated sandbox copy started on free port`);
-      if(data.passed){
+      if(data.startup_failed){
+        logLine(`<span class="tag tag-validate">[VALIDATE]</span> <span class="tag-crit">✗ sandbox failed to start</span> — code has syntax errors`);
+      } else if(data.passed){
         logLine(`<span class="tag tag-validate">[VALIDATE]</span> exploit re-fired <span class="tag-validate">✓ blocked</span> &nbsp;·&nbsp; benign request <span class="tag-validate">✓ ok</span>`);
       } else {
-        logLine(`<span class="tag tag-validate">[VALIDATE]</span> <span class="tag-crit">✗ test failed</span> — ${Number(data.exploit_count||0)} exploits still work`);
+        const ec = Number(data.exploit_count||0);
+        const label = ec === 0 ? 'could not verify' : `${ec} exploits still work`;
+        logLine(`<span class="tag tag-validate">[VALIDATE]</span> <span class="tag-crit">✗ test failed</span> — ${label}`);
       }
       break;
 
