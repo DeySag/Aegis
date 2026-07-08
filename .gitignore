@@ -32,6 +32,8 @@ Thumbs.db
 # Logs and per-run artifacts
 *.log
 attack_results.json
+stress_test_results.json
+gpu_benchmark_results.json
 
 # Git
 *.orig

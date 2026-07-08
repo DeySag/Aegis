@@ -4,6 +4,7 @@ import shutil
 import sys
 import textwrap
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -104,7 +105,8 @@ PATCH_PATH_LLM = "llm"
 PATCH_PATH_LOOKUP = "lookup"
 
 
-def generate_patch(report: ForensicReport | dict) -> tuple[PatchProposal, str]:
+def generate_patch(report: ForensicReport | dict,
+                   on_event: Callable[[str, dict], None] | None = None) -> tuple[PatchProposal, str]:
     if isinstance(report, dict):
         report = ForensicReport.model_validate(report)
 
@@ -112,6 +114,13 @@ def generate_patch(report: ForensicReport | dict) -> tuple[PatchProposal, str]:
     if llm_patch is not None:
         print(f"[PatchEngine] Path: LLM")
         return llm_patch, PATCH_PATH_LLM
+
+    if on_event:
+        on_event("fallback", {
+            "path": "lookup",
+            "vuln_type": report.vuln_type.value,
+            "reason": "llm_all_retries_exhausted",
+        })
 
     print("[PatchEngine] Path: lookup fallback")
     vuln_key = report.vuln_type

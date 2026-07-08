@@ -4,6 +4,7 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from collections.abc import Callable
 from typing import Any
 
 _proj = Path(__file__).resolve().parents[2]
@@ -78,7 +79,8 @@ def _report_line_unsafe(report: ForensicReport) -> bool:
         return False
 
 
-def investigate_llm(alert: AlertEvent, config_override: LLMConfig | None = None) -> ForensicReport | None:
+def investigate_llm(alert: AlertEvent, config_override: LLMConfig | None = None,
+                    on_event: Callable[[str, dict], None] | None = None) -> ForensicReport | None:
     config = config_override or LLMConfig()
     if not config.configured:
         return None
@@ -118,11 +120,31 @@ def investigate_llm(alert: AlertEvent, config_override: LLMConfig | None = None)
         elif not _report_line_unsafe(report):
             print(f"[Investigator] LLM reported line {report.line} has no unsafe call "
                   f"pattern, falling back")
+            if on_event:
+                on_event("safety-net", {
+                    "reason": "source_line_validation",
+                    "reported_line": report.line,
+                    "reported_file": report.file,
+                    "reported_confidence": report.confidence,
+                })
         else:
             print(f"[Investigator] LLM confidence {report.confidence} < "
                   f"{MIN_LLM_CONFIDENCE}, falling back")
+            if on_event:
+                on_event("safety-net", {
+                    "reason": "low_confidence",
+                    "reported_line": report.line,
+                    "reported_file": report.file,
+                    "reported_confidence": report.confidence,
+                    "threshold": MIN_LLM_CONFIDENCE,
+                })
     except Exception as e:
         print(f"[Investigator] LLM path failed ({e}), falling back")
+        if on_event:
+            on_event("safety-net", {
+                "reason": "llm_error",
+                "message": str(e),
+            })
 
     return None
 
@@ -203,17 +225,26 @@ INVESTIGATOR_PATH_LLM = "llm"
 INVESTIGATOR_PATH_HEURISTIC = "heuristic"
 
 
-def investigate(alert: AlertEvent | dict) -> tuple[ForensicReport, str]:
+def investigate(alert: AlertEvent | dict,
+                on_event: Callable[[str, dict], None] | None = None) -> tuple[ForensicReport, str]:
     if isinstance(alert, dict):
         alert = AlertEvent.model_validate(alert)
 
-    llm_report = investigate_llm(alert)
+    llm_report = investigate_llm(alert, on_event=on_event)
     if llm_report is not None:
         print(f"[Investigator] Path: LLM (confidence={llm_report.confidence})")
         return llm_report, INVESTIGATOR_PATH_LLM
 
     print("[Investigator] Path: heuristic fallback")
-    return investigate_heuristic(alert), INVESTIGATOR_PATH_HEURISTIC
+    report = investigate_heuristic(alert)
+    if on_event:
+        on_event("fallback", {
+            "path": "heuristic",
+            "file": report.file,
+            "line": report.line,
+            "confidence": report.confidence,
+        })
+    return report, INVESTIGATOR_PATH_HEURISTIC
 
 
 if __name__ == "__main__":

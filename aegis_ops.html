@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AEGIS // LIVE OPS</title>
+<style>
+  :root{
+    --bg:            #0a0d0c;
+    --bg-panel:      #0d1210;
+    --bg-panel-2:    #101613;
+    --border:        #1c2723;
+    --border-bright: #2a3a34;
+    --text:          #cfe8dc;
+    --text-dim:      #5d766c;
+    --text-dimmer:   #3c4a45;
+    --info:          #6fd6c9;
+    --warn:          #ffb454;
+    --crit:          #ff5d5d;
+    --ok:            #7ee787;
+    --llm:           #b892ff;
+    --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* faint scanline texture, static — not animated, so it reads as material not gimmick */
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background:repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.012) 0px,
+      rgba(255,255,255,0.012) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events:none;
+    z-index:50;
+  }
+
+  .app{
+    display:grid;
+    grid-template-columns: 1fr 300px;
+    height:100vh;
+  }
+
+  /* ---------- header bar ---------- */
+  .topbar{
+    grid-column: 1 / -1;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 22px;
+    border-bottom:1px solid var(--border);
+    background:var(--bg-panel);
+  }
+  .brand{
+    display:flex; align-items:baseline; gap:10px;
+    font-weight:700; letter-spacing:0.14em;
+    font-size:15px;
+  }
+  .brand .mark{ color:var(--info); }
+  .brand .sub{
+    font-weight:400; letter-spacing:0.06em;
+    font-size:11px; color:var(--text-dim);
+  }
+  .status-cluster{ display:flex; align-items:center; gap:18px; font-size:11px; letter-spacing:0.04em; color:var(--text-dim); }
+  .status-cluster b{ color:var(--text); font-weight:600; }
+  .dot{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--ok);
+    display:inline-block; margin-right:6px;
+    box-shadow:0 0 6px var(--ok);
+    animation:pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{ opacity:1; } 50%{ opacity:0.45; } }
+
+  /* ---------- main grid areas ---------- */
+  .main{ display:flex; flex-direction:column; min-height:0; border-right:1px solid var(--border); }
+  .side{ display:flex; flex-direction:column; background:var(--bg-panel); min-height:0; }
+
+  /* ---------- terminal feed ---------- */
+  .feed-head{
+    padding:10px 20px; font-size:10px; letter-spacing:0.14em;
+    color:var(--text-dimmer); border-bottom:1px solid var(--border);
+    display:flex; justify-content:space-between;
+  }
+  .feed{
+    flex:1; overflow-y:auto; padding:16px 20px 8px;
+    font-size:13px; line-height:1.65;
+  }
+  .feed::-webkit-scrollbar{ width:8px; }
+  .feed::-webkit-scrollbar-thumb{ background:var(--border-bright); border-radius:4px; }
+
+  .line{ white-space:pre-wrap; word-break:break-word; opacity:0; animation:rise .22s ease-out forwards; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(2px);} to{ opacity:1; transform:translateY(0);} }
+
+  .ts{ color:var(--text-dimmer); }
+  .tag{ font-weight:700; padding:0 2px; }
+  .tag-alert{ color:var(--crit); }
+  .tag-invest{ color:var(--info); }
+  .tag-patch{ color:var(--warn); }
+  .tag-validate{ color:var(--ok); }
+  .tag-sys{ color:var(--text-dim); }
+  .tag-resolved{ color:var(--ok); }
+  .tag-fallback{ color:var(--warn); }
+
+  .path-llm{ color:var(--llm); font-weight:600; }
+  .path-heur{ color:var(--text-dim); font-style:italic; }
+  .dim{ color:var(--text-dim); }
+  .divider{ color:var(--border-bright); }
+
+  .cursor-row{ display:flex; align-items:center; padding:4px 20px 16px; font-size:13px; color:var(--text-dim); }
+  .cursor{
+    display:inline-block; width:8px; height:15px; margin-left:6px;
+    background:var(--info); animation:blink 1s step-end infinite;
+  }
+  @keyframes blink{ 50%{ opacity:0; } }
+
+  /* ---------- side panel ---------- */
+  .side-head{
+    padding:10px 18px; font-size:10px; letter-spacing:0.14em;
+    color:var(--text-dimmer); border-bottom:1px solid var(--border);
+  }
+  .panel{ padding:16px 18px; border-bottom:1px solid var(--border); }
+  .panel-title{ font-size:10px; letter-spacing:0.12em; color:var(--text-dim); margin-bottom:10px; }
+
+  .metric-row{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:10px; }
+  .metric-label{ font-size:11px; color:var(--text-dim); letter-spacing:0.04em; }
+  .metric-value{ font-size:15px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+  .metric-unit{ font-size:10px; color:var(--text-dim); font-weight:400; margin-left:2px; }
+
+  .bar-track{
+    height:6px; background:var(--bg); border:1px solid var(--border);
+    border-radius:3px; overflow:hidden; margin-top:4px;
+  }
+  .bar-fill{ height:100%; background:var(--info); transition:width .6s ease; }
+  .bar-fill.warn{ background:var(--warn); }
+  .bar-fill.crit{ background:var(--crit); }
+
+  canvas.spark{ width:100%; height:36px; display:block; margin-top:4px; }
+
+  .model-line{ font-size:12px; color:var(--text); }
+  .model-sub{ font-size:10px; color:var(--text-dim); margin-top:3px; }
+
+  .legend{ padding:14px 18px; font-size:10px; color:var(--text-dim); line-height:1.9; }
+  .legend b{ font-weight:700; }
+  .legend .k{ display:inline-block; width:9px; }
+
+  @media (prefers-reduced-motion: reduce){
+    .dot, .cursor, .line{ animation:none !important; }
+  }
+
+  @media (max-width: 860px){
+    .app{ grid-template-columns:1fr; grid-template-rows:auto 1fr auto; }
+    .main{ border-right:none; border-bottom:1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <span class="mark">AEGIS</span><span class="sub">// LIVE OPS &nbsp;·&nbsp; self-healing threat response</span>
+    </div>
+    <div class="status-cluster">
+      <span><span class="dot"></span><b id="statusText">MONITORING</b></span>
+      <span>alerts today: <b id="alertCount">0</b></span>
+      <span>auto-patched: <b id="patchCount">0</b></span>
+      <span>queue: <b id="queueCount">0</b></span>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="feed-head">
+      <span>/data/logs/traffic.log &nbsp;→&nbsp; pipeline.py &nbsp;→&nbsp; sandbox_target/app.py</span>
+      <span id="clock">--:--:--</span>
+    </div>
+    <div class="feed" id="feed"></div>
+    <div class="cursor-row">watching for anomalies<span class="cursor"></span></div>
+  </div>
+
+  <div class="side">
+    <div class="side-head">ROCm // GPU 0</div>
+
+    <div class="panel">
+      <div class="panel-title">MODEL SERVING LOCALLY</div>
+      <div class="model-line" id="modelName">Llama-3-8B-Instruct</div>
+      <div class="model-sub" id="modelSub">fp16 · vLLM · ROCm 6.x</div>
+    </div>
+
+    <div class="panel">
+      <div class="metric-row"><span class="metric-label">VRAM</span><span class="metric-value"><span id="vramVal">—</span><span class="metric-unit">GB</span></span></div>
+      <div class="bar-track"><div class="bar-fill" id="vramBar" style="width:0%"></div></div>
+
+      <div class="metric-row" style="margin-top:14px;"><span class="metric-label">GPU UTIL</span><span class="metric-value"><span id="utilVal">—</span><span class="metric-unit">%</span></span></div>
+      <canvas class="spark" id="utilSpark"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="metric-row"><span class="metric-label">THROUGHPUT</span><span class="metric-value"><span id="tokVal">—</span><span class="metric-unit">tok/s</span></span></div>
+      <canvas class="spark" id="tokSpark"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="metric-row"><span class="metric-label">LATENCY</span><span class="metric-value"><span id="latVal">—</span><span class="metric-unit">ms</span></span></div>
+      <div class="metric-row"><span class="metric-label">TTFT</span><span class="metric-value"><span id="ttftVal">—</span><span class="metric-unit">ms</span></span></div>
+      <div class="metric-row"><span class="metric-label">POWER</span><span class="metric-value"><span id="powVal">—</span><span class="metric-unit">W</span></span></div>
+      <div class="metric-row" style="margin-bottom:0;"><span class="metric-label">TEMP</span><span class="metric-value"><span id="tempVal">—</span><span class="metric-unit">°C</span></span></div>
+    </div>
+
+    <div class="legend">
+      <div><span class="k"></span><span class="path-llm">■</span> AI reasoning path (LLM)</div>
+      <div><span class="k"></span><span class="path-heur">■</span> heuristic fallback</div>
+      <div><span class="k"></span><span class="tag-validate">■</span> validated / resolved</div>
+      <div><span class="k"></span><span class="tag-crit tag-alert">■</span> active alert</div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   AEGIS LIVE OPS — FRONTEND ENGINE
+   =========================================================================
+   Connects to backend SSE at /events for real pipeline data.
+   Falls back to scripted mock data if backend is unavailable.
+   ========================================================================= */
+
+const feed = document.getElementById('feed');
+const statusText = document.getElementById('statusText');
+let alertCount = 0, patchCount = 0, queueCount = 0;
+let usingMock = false;
+
+function ts(){
+  const d = new Date();
+  return d.toTimeString().slice(0,8);
+}
+setInterval(()=>{ document.getElementById('clock').textContent = ts(); }, 1000);
+
+function logLine(html){
+  const el = document.createElement('div');
+  el.className = 'line';
+  el.innerHTML = `<span class="ts">[${ts()}]</span> ${html}`;
+  feed.appendChild(el);
+  feed.scrollTop = feed.scrollHeight;
+  while(feed.children.length > 220){ feed.removeChild(feed.firstChild); }
+}
+
+function divider(){
+  logLine(`<span class="divider">${'·'.repeat(58)}</span>`);
+}
+
+function setCounts(){
+  document.getElementById('alertCount').textContent = alertCount;
+  document.getElementById('patchCount').textContent = patchCount;
+  document.getElementById('queueCount').textContent = queueCount;
+}
+
+/* =========================================================================
+   SSE EVENT HANDLERS — recieves structured events from ops_server.py
+   Each event has {type, stage, ...} shape.
+   ========================================================================= */
+
+function handleGpuEvent(data){
+  // Called with {"type":"gpu","vram_gb":9.2,"util_pct":38,"tok_per_s":96,
+  //   "latency_ms":640,"ttft_ms":210,"power_w":142,"temp_c":58,
+  //   "model":"...","util_hist":[...],"tok_hist":[...],"vram_max_gb":24}
+  const vmax = data.vram_max_gb || 24;
+  const pct = data.vram_pct != null ? data.vram_pct : ((data.vram_gb / vmax) * 100);
+
+  document.getElementById('vramVal').textContent = data.vram_gb.toFixed(1);
+  document.getElementById('vramBar').style.width = pct.toFixed(0) + '%';
+  const cls = pct > 85 ? 'crit' : pct > 65 ? 'warn' : '';
+  document.getElementById('vramBar').className = 'bar-fill' + (cls ? ' ' + cls : '');
+
+  document.getElementById('utilVal').textContent = Math.round(data.util_pct);
+  document.getElementById('tokVal').textContent = Math.round(data.tok_per_s);
+  document.getElementById('latVal').textContent = Math.round(data.latency_ms);
+  document.getElementById('ttftVal').textContent = Math.round(data.ttft_ms);
+  document.getElementById('powVal').textContent = Math.round(data.power_w);
+  document.getElementById('tempVal').textContent = data.temp_c.toFixed(1);
+
+  if(data.model) document.getElementById('modelName').textContent = data.model;
+
+  if(data.util_hist) drawSparkFromArray(document.getElementById('utilSpark'), data.util_hist, 'rgb(111,214,201)', 100);
+  if(data.tok_hist) drawSparkFromArray(document.getElementById('tokSpark'), data.tok_hist, 'rgb(184,146,255)', 260);
+}
+
+function drawSparkFromArray(canvas, hist, color, max){
+  if(!canvas || !hist || hist.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.clientWidth * devicePixelRatio;
+  const h = canvas.height = canvas.clientHeight * devicePixelRatio;
+  ctx.clearRect(0,0,w,h);
+  ctx.beginPath();
+  hist.forEach((v,i)=>{
+    const x = (i/(hist.length-1)) * w;
+    const y = h - (Math.min(v,max)/max) * h;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5 * devicePixelRatio;
+  ctx.stroke();
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = color.replace(')', ',0.10)').replace('rgb','rgba');
+  ctx.fill();
+}
+
+function handleLogEvent(data){
+  // data.stage: alert | investigate | safety-net | fallback | patch | validate | resolve | sys
+  const stage = data.stage || '';
+  const msg = data.message || '';
+
+  switch(stage){
+    case 'alert':
+      statusText.textContent = 'ALERT';
+      alertCount++; queueCount = 1; setCounts();
+      divider();
+      logLine(`<span class="tag tag-alert">[ALERT]</span> ${escHtml(msg)} <span class="dim">— severity: ${escHtml(data.severity||'high')}</span>`);
+      if(data.payload) logLine(`<span class="tag tag-sys">[SYS]</span> payload: <span class="dim">${escHtml(data.payload)}</span>`);
+      break;
+
+    case 'investigate':
+      statusText.textContent = 'INVESTIGATING';
+      if(data.path === 'llm'){
+        logLine(`<span class="tag tag-invest">[INVESTIGATE]</span> <span class="path-llm">llm</span> → ${pathShort(data.file)}:${data.line} <span class="dim">confidence ${Number(data.confidence).toFixed(2)}</span>`);
+        logLine(`<span class="tag tag-sys">[SYS]</span> source-line validation vs disk <span class="tag-validate">✓ pass</span>`);
+      }
+      break;
+
+    case 'safety-net':
+      statusText.textContent = 'INVESTIGATING';
+      if(data.reason === 'low_confidence'){
+        logLine(`<span class="tag tag-invest">[INVESTIGATE]</span> <span class="path-llm">llm</span> → ${pathShort(data.reported_file)}:${data.reported_line} <span class="dim">confidence ${Number(data.reported_confidence).toFixed(2)}</span>`);
+        logLine(`<span class="tag tag-fallback">[SAFETY-NET]</span> confidence ${Number(data.reported_confidence).toFixed(2)} below threshold (${data.threshold||0.70}) <span class="dim">— rejecting LLM output</span>`);
+      } else if(data.reason === 'source_line_validation'){
+        logLine(`<span class="tag tag-invest">[INVESTIGATE]</span> <span class="path-llm">llm</span> → ${pathShort(data.reported_file)}:${data.reported_line} <span class="dim">confidence ${Number(data.reported_confidence).toFixed(2)}</span>`);
+        logLine(`<span class="tag tag-fallback">[SAFETY-NET]</span> source-line validation failed <span class="dim">— rejecting LLM output (no unsafe pattern at line ${data.reported_line})</span>`);
+      } else {
+        logLine(`<span class="tag tag-fallback">[SAFETY-NET]</span> ${escHtml(msg || 'LLM path failed, falling back')}`);
+      }
+      break;
+
+    case 'fallback':
+      if(data.path === 'heuristic'){
+        logLine(`<span class="tag tag-fallback">[FALLBACK]</span> <span class="path-heur">heuristic</span> keyword lookup → ${pathShort(data.file)}:${data.line} <span class="dim">confidence ${Number(data.confidence).toFixed(2)}</span>`);
+      } else if(data.path === 'lookup'){
+        logLine(`<span class="tag tag-fallback">[FALLBACK]</span> <span class="path-heur">lookup</span> secure replacement for ${escHtml(data.vuln_type||'unknown')}`);
+      }
+      break;
+
+    case 'patch':
+      statusText.textContent = 'PATCHING';
+      logLine(`<span class="tag tag-patch">[PATCH]</span> generating secure replacement <span class="dim">(shlex.split, no shell=True)</span>`);
+      if(data.path === 'llm'){
+        logLine(`<span class="tag tag-patch">[PATCH]</span> <span class="path-llm">llm</span> → ast.parse <span class="tag-validate">✓ syntax valid</span>`);
+      } else {
+        logLine(`<span class="tag tag-patch">[PATCH]</span> <span class="path-heur">lookup</span> → ast.parse <span class="tag-validate">✓ syntax valid</span>`);
+      }
+      break;
+
+    case 'apply':
+      logLine(`<span class="tag tag-sys">[SYS]</span> patch written to disk + hot-reload triggered`);
+      break;
+
+    case 'validate':
+      statusText.textContent = 'VALIDATING';
+      logLine(`<span class="tag tag-validate">[VALIDATE]</span> isolated sandbox copy started on free port`);
+      if(data.passed){
+        logLine(`<span class="tag tag-validate">[VALIDATE]</span> exploit re-fired <span class="tag-validate">✓ blocked</span> &nbsp;·&nbsp; benign request <span class="tag-validate">✓ ok</span>`);
+      } else {
+        logLine(`<span class="tag tag-validate">[VALIDATE]</span> <span class="tag-crit">✗ test failed</span> — ${Number(data.exploit_count||0)} exploits still work`);
+      }
+      break;
+
+    case 'resolve':
+      logLine(`<span class="tag tag-resolved">[RESOLVED]</span> ${escHtml(msg)}`);
+      if(data.passed != null){
+        const ok = data.passed === true || data.passed === 'True';
+        logLine(`<span class="tag tag-resolved">[RESOLVED]</span> sandbox ${ok ? 'PASSED' : 'FAILED'} <span class="dim">· ${data.total_time_s || '?'}s total</span>`);
+      }
+      patchCount++; queueCount = 0; setCounts();
+      statusText.textContent = 'MONITORING';
+      break;
+
+    case 'error':
+      logLine(`<span class="tag tag-alert">[ERROR]</span> ${escHtml(msg || data.message || 'Pipeline error')}`);
+      queueCount = 0; setCounts();
+      statusText.textContent = 'MONITORING';
+      break;
+
+    default:
+      logLine(`<span class="tag tag-sys">[SYS]</span> ${escHtml(msg)}`);
+  }
+}
+
+function handleStatsEvent(data){
+  if(data.alerts_today != null) alertCount = data.alerts_today;
+  if(data.patches_today != null) patchCount = data.patches_today;
+  if(data.queue != null) queueCount = data.queue;
+  setCounts();
+}
+
+function handleSSEEvent(data){
+  switch(data.type){
+    case 'log': handleLogEvent(data); break;
+    case 'gpu': handleGpuEvent(data); break;
+    case 'stats': handleStatsEvent(data); break;
+    case 'error':
+      logLine(`<span class="tag tag-alert">[ERROR]</span> ${escHtml(data.message||'Unknown error')}`);
+      statusText.textContent = 'MONITORING';
+      break;
+  }
+}
+
+function pathShort(fp){
+  if(!fp) return 'app.py';
+  const parts = fp.replace(/\\/g,'/').split('/');
+  return parts.slice(-2).join('/');
+}
+
+function escHtml(s){
+  if(!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* =========================================================================
+   BACKEND CONNECTION — SSE, falls back to mock on error
+   ========================================================================= */
+
+let sse = null;
+let mockRunning = false;
+
+function connectBackend(){
+  if(!window.EventSource){
+    startMock();
+    return;
+  }
+
+  sse = new EventSource('/events');
+  let connected = false;
+
+  sse.onopen = () => {
+    connected = true;
+    mockRunning = false;
+    logLine(`<span class="tag tag-sys">[SYS]</span> connected to Aegis Ops Server <span class="dim">— real-time pipeline feed</span>`);
+  };
+
+  sse.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      handleSSEEvent(data);
+    } catch(err){
+      console.warn('SSE parse error:', err);
+    }
+  };
+
+  sse.onerror = () => {
+    sse.close();
+    sse = null;
+    if(!connected){
+      // Connection failed immediately — backend not running
+      logLine(`<span class="tag tag-sys">[SYS]</span> backend unavailable <span class="dim">— using simulated scenarios</span>`);
+      startMock();
+    }
+    // If connected was true, the server went down mid-session — show error but keep feed
+  };
+}
+
+function startMock(){
+  if(mockRunning) return;
+  mockRunning = true;
+  logLine(`<span class="tag tag-sys">[SYS]</span> mock data engine started <span class="dim">— ${scenarios.length} scenario(s)</span>`);
+  mockLoop();
+}
+
+/* ---- scripted attack scenarios (fallback when no backend) ---- */
+const scenarios = [
+  {
+    payload: 'cmd=whoami;dir',
+    line: 34, conf: 0.94, path: 'llm', model: 'llama-3-8b-instruct',
+    outcome: 'resolved'
+  },
+  {
+    payload: 'cmd=echo test && rm -rf /tmp/x',
+    line: 34, conf: 0.31, path: 'llm-rejected', model: 'llama-3-8b-instruct',
+    outcome: 'fallback'
+  },
+  {
+    payload: 'cmd=%3B+cat+%2Fetc%2Fpasswd',
+    line: 34, conf: 0.97, path: 'llm', model: 'llama-3-8b-instruct',
+    outcome: 'resolved'
+  },
+];
+let sIdx = 0;
+
+async function wait(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+async function runCycle(){
+  const s = scenarios[sIdx % scenarios.length];
+  sIdx++;
+
+  divider();
+  statusText.textContent = 'ALERT';
+  alertCount++; queueCount = 1; setCounts();
+
+  logLine(`<span class="tag tag-alert">[ALERT]</span> suspicious pattern detected in traffic.log <span class="dim">— severity: high</span>`);
+  await wait(380);
+  logLine(`<span class="tag tag-sys">[SYS]</span> payload: <span class="dim">${s.payload}</span>`);
+  await wait(500);
+
+  statusText.textContent = 'INVESTIGATING';
+  logLine(`<span class="tag tag-invest">[INVESTIGATE]</span> dispatching to Forensic Investigator <span class="path-llm">(LLM primary)</span>`);
+  await wait(650);
+
+  if(s.path === 'llm'){
+    logLine(`<span class="tag tag-invest">[INVESTIGATE]</span> <span class="path-llm">llm</span> → app.py:${s.line} <span class="dim">confidence ${s.conf.toFixed(2)}</span>`);
+    await wait(450);
+    logLine(`<span class="tag tag-sys">[SYS]</span> source-line validation vs disk <span class="tag-validate">✓ pass</span>`);
+  } else {
+    logLine(`<span class="tag tag-invest">[INVESTIGATE]</span> <span class="path-llm">llm</span> → app.py:${s.line} <span class="dim">confidence ${s.conf.toFixed(2)}</span>`);
+    await wait(450);
+    logLine(`<span class="tag tag-fallback">[SAFETY-NET]</span> confidence below threshold (0.70) <span class="dim">— rejecting LLM output</span>`);
+    await wait(400);
+    logLine(`<span class="tag tag-fallback">[FALLBACK]</span> <span class="path-heur">heuristic</span> keyword lookup → app.py:34`);
+  }
+  await wait(550);
+
+  statusText.textContent = 'PATCHING';
+  logLine(`<span class="tag tag-patch">[PATCH]</span> generating secure replacement <span class="dim">(shlex.split, no shell=True)</span>`);
+  await wait(600);
+  logLine(`<span class="tag tag-patch">[PATCH]</span> ast.parse <span class="tag-validate">✓ syntax valid</span>`);
+  await wait(450);
+
+  statusText.textContent = 'VALIDATING';
+  logLine(`<span class="tag tag-validate">[VALIDATE]</span> isolated sandbox copy started on free port`);
+  await wait(600);
+  logLine(`<span class="tag tag-validate">[VALIDATE]</span> exploit re-fired <span class="tag-validate">✓ blocked</span> &nbsp;·&nbsp; benign request <span class="tag-validate">✓ ok</span>`);
+  await wait(450);
+
+  logLine(`<span class="tag tag-resolved">[RESOLVED]</span> app.py:${s.line} patched + hot-reloaded <span class="dim">· ${((Math.random()*0.6)+0.9).toFixed(2)}s total</span>`);
+  patchCount++; queueCount = 0; setCounts();
+  statusText.textContent = 'MONITORING';
+}
+
+async function mockLoop(){
+  while(mockRunning){
+    await runCycle();
+    await wait(3800 + Math.random()*2200);
+  }
+}
+
+/* =========================================================================
+   GPU PANEL — mock ROCm telemetry (used only when backend SSE is off)
+   ========================================================================= */
+const vramMax = 24;
+let vram = 9.2, util = 38, tok = 96, lat = 640, ttft = 210, pow_ = 142, temp = 58;
+const utilHist = new Array(40).fill(0);
+const tokHist = new Array(40).fill(0);
+let gpuMockInterval = null;
+
+function drawSparkLocal(canvas, hist, color, max){
+  if(!canvas || !hist || hist.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width = canvas.clientWidth * devicePixelRatio;
+  const h = canvas.height = canvas.clientHeight * devicePixelRatio;
+  ctx.clearRect(0,0,w,h);
+  ctx.beginPath();
+  hist.forEach((v,i)=>{
+    const x = (i/(hist.length-1)) * w;
+    const y = h - (Math.min(v,max)/max) * h;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5 * devicePixelRatio;
+  ctx.stroke();
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = color.replace(')', ',0.10)').replace('rgb','rgba');
+  ctx.fill();
+}
+
+function updateGpuMock(){
+  const busy = statusText.textContent !== 'MONITORING';
+  vram = clamp(vram + (Math.random()-0.5)*0.3 + (busy? 0.15:-0.05), 6, vramMax*0.9);
+  util = clamp(util + (Math.random()-0.5)*8 + (busy? 14:-6), 4, 98);
+  tok  = clamp(tok + (Math.random()-0.5)*10 + (busy? 20:-8), 20, 260);
+  lat  = clamp(lat + (Math.random()-0.5)*40, 180, 1400);
+  ttft = clamp(ttft + (Math.random()-0.5)*20, 80, 600);
+  pow_ = clamp(pow_ + (Math.random()-0.5)*6 + (busy? 8:-3), 60, 260);
+  temp = clamp(temp + (Math.random()-0.5)*0.6 + (busy? 0.3:-0.1), 42, 82);
+
+  utilHist.shift(); utilHist.push(util);
+  tokHist.shift(); tokHist.push(tok);
+
+  document.getElementById('vramVal').textContent = vram.toFixed(1);
+  document.getElementById('vramBar').style.width = (vram/vramMax*100).toFixed(0)+'%';
+  document.getElementById('vramBar').className = 'bar-fill' + (vram/vramMax>0.85?' crit':vram/vramMax>0.65?' warn':'');
+
+  document.getElementById('utilVal').textContent = util.toFixed(0);
+  document.getElementById('tokVal').textContent = tok.toFixed(0);
+  document.getElementById('latVal').textContent = lat.toFixed(0);
+  document.getElementById('ttftVal').textContent = ttft.toFixed(0);
+  document.getElementById('powVal').textContent = pow_.toFixed(0);
+  document.getElementById('tempVal').textContent = temp.toFixed(0);
+
+  drawSparkLocal(document.getElementById('utilSpark'), utilHist, 'rgb(111,214,201)', 100);
+  drawSparkLocal(document.getElementById('tokSpark'), tokHist, 'rgb(184,146,255)', 260);
+}
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+/* =========================================================================
+   INIT — try backend first, fall back to mock on connection failure
+   ========================================================================= */
+
+// Always start the local clock
+document.getElementById('clock').textContent = ts();
+
+// Start GPU mock telemetry (runs regardless — SSE overrides values when connected)
+gpuMockInterval = setInterval(updateGpuMock, 900);
+updateGpuMock();
+
+// Try backend
+connectBackend();
+</script>
+</body>
+</html>
