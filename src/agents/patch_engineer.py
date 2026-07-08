@@ -165,33 +165,30 @@ def apply_patch(patch: PatchProposal | dict, backup: bool = True) -> str:
         shutil.copy2(str(target), str(backup_path))
         print(f"[PatchEngine] Backup saved: {backup_path}")
 
-    content = target.read_text(encoding="utf-8")
     orig_code = patch.original_code.strip()
     patch_code = patch.patch_code.strip()
 
-    if orig_code in content:
-        content = content.replace(orig_code, patch_code, 1)
-    else:
-        lines = content.splitlines()
-        line_idx = patch.target_line - 1
-        if 0 <= line_idx < len(lines):
-            # Find the end of the original multi-line block by tracking
-            # open-parens from the target line through the closing paren.
-            depth = 0
-            end_idx = line_idx
-            for i in range(line_idx, len(lines)):
-                stripped = lines[i].strip()
-                depth += stripped.count("(") - stripped.count(")")
-                if depth <= 0 and stripped.startswith(")"):
-                    end_idx = i
-                    break
-            # Remove the original block
-            del lines[line_idx:end_idx + 1]
-            # Insert patch code at the same location
-            patch_lines = [""] + patch_code.split("\n")
-            for j, pl in enumerate(patch_lines):
-                lines.insert(line_idx + j, pl)
-        content = "\n".join(lines)
+    lines = content.splitlines()
+    line_idx = patch.target_line - 1
+    if 0 <= line_idx < len(lines):
+        # Track paren depth from target line to find end of original block.
+        # Handles both single-line (depth=0 at target line) and multi-line
+        # (e.g. subprocess.run( ... )) blocks.
+        depth = 0
+        end_idx = line_idx
+        for i in range(line_idx, len(lines)):
+            stripped = lines[i].strip()
+            depth += stripped.count("(") - stripped.count(")")
+            if depth <= 0:
+                end_idx = i
+                break
+        # Remove the original block (target line through closing paren)
+        del lines[line_idx:end_idx + 1]
+        # Insert patch code at the same location
+        patch_lines = [""] + patch_code.split("\n")
+        for j, pl in enumerate(patch_lines):
+            lines.insert(line_idx + j, pl)
+    content = "\n".join(lines)
 
     target.write_text(content, encoding="utf-8")
 

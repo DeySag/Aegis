@@ -180,11 +180,12 @@ def investigate_heuristic(alert: AlertEvent) -> ForensicReport:
         end = min(len(all_lines), line_num + 5)
         context = "".join(all_lines[start:end])
         vulnerable_block = ""
-        i = line_num - 1
-        while i < len(all_lines) and "subprocess.run" in all_lines[i]:
+        depth = 0
+        for i in range(line_num - 1, len(all_lines)):
+            stripped = all_lines[i].strip()
+            depth += stripped.count("(") - stripped.count(")")
             vulnerable_block += all_lines[i]
-            i += 1
-            if i < len(all_lines) and all_lines[i].strip().startswith("output"):
+            if depth <= 0:
                 break
         if not vulnerable_block:
             vulnerable_block = context.strip()
