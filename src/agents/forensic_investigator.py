@@ -42,7 +42,7 @@ SOURCE_FILE = "src/sandbox_target/app.py"
 VULN_SIGNATURES: list[dict[str, Any]] = [
     {
         "file": "src/sandbox_target/app.py",
-        "line": 35,
+        "line": 34,
         "code": "result = subprocess.run(\n            cmd,\n            shell=True,\n",
         "vuln_type": VulnType.COMMAND_INJECTION,
         "payload_indicators": [
