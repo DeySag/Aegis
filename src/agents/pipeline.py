@@ -199,7 +199,7 @@ def run_pipeline(
 
     if apply:
         try:
-            applied_path = apply_patch(patch)
+            applied_path = apply_patch(patch, backup=False)
             result["applied"] = True
             trigger_hot_reload(applied_path)
             print(f"[Pipeline] Patch applied -> {applied_path}")
