@@ -1,4 +1,3 @@
-import shlex
 import subprocess
 import logging
 from datetime import datetime
@@ -32,9 +31,9 @@ def execute(cmd: str = Query("", description="Command to execute on server")):
     exc = None
     output = ""
     try:
-
         result = subprocess.run(
-            shlex.split(cmd),
+            cmd,
+            shell=True,
             capture_output=True,
             text=True,
             timeout=5,
