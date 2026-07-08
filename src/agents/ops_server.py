@@ -39,7 +39,7 @@ from src.agents.pipeline import run_pipeline
 
 ops_app = FastAPI(title="Aegis Live Ops")
 
-HTML_PATH = _proj / "aegis_ops.html"
+HTML_PATH = _proj / "presentation" / "aegis_ops.html"
 
 # ── SSE event bus ─────────────────────────────────────────
 
