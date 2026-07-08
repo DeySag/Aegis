@@ -1,7 +1,6 @@
-import shlex
 import subprocess
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, Query
@@ -32,48 +31,9 @@ def execute(cmd: str = Query("", description="Command to execute on server")):
     exc = None
     output = ""
     try:
-
-result = subprocess.run(
-    shlex.split(cmd),
-    capture_output=True,
-    text=True,
-    timeout=5,
-)
         result = subprocess.run(
-
-result = subprocess.run(
-    cmd.split(),
-    capture_output=True,
-    text=True,
-    timeout=5,
-)
-result = subprocess.run(
-    ["ping", "-n", "1", "127.0.0.1"],
-    capture_output=True,
-    text=True,
-    timeout=5,
-)
-result = subprocess.run(
-    [cmd],
-    capture_output=True,
-    text=True,
-    timeout=5,
-    shell=False
-)
-result = subprocess.run(
-    [cmd],
-    capture_output=True,
-    text=True,
-    timeout=5,
-    shell=False
-)
-result = subprocess.run(
-    [cmd],
-    capture_output=True,
-    text=True,
-    timeout=5,
-)
-            shlex.split(cmd),
+            cmd,
+            shell=True,
             capture_output=True,
             text=True,
             timeout=5,
@@ -91,7 +51,7 @@ result = subprocess.run(
         "cmd": cmd,
         "output": output,
         "error": exc,
-        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "timestamp": datetime.utcnow().isoformat() + "Z",
     })
 
 
