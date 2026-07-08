@@ -7,11 +7,37 @@ from src.agents.config import LLMConfig
 
 
 def extract_json(raw: str) -> str:
-    """Strip markdown fences and extract the first { ... } block."""
-    raw = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
-    raw = re.sub(r"\s*```$", "", raw)
-    m = re.search(r"\{.*\}", raw, re.DOTALL)
-    return m.group(0) if m else raw
+    """Strip markdown fences and extract the first valid JSON object.
+    Handles truncated output by searching for the last complete }."""
+
+    # Strip markdown fences
+    cleaned = re.sub(r"^```(?:json)?\s*", "", raw.strip(), flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    cleaned = cleaned.strip()
+
+    # Try direct parse first
+    try:
+        json.loads(cleaned)
+        return cleaned
+    except json.JSONDecodeError:
+        pass
+
+    # Find the first { and try progressively shorter suffixes
+    start = cleaned.find("{")
+    if start == -1:
+        return cleaned
+
+    from_end = cleaned.rfind("}")
+    while from_end > start:
+        candidate = cleaned[start:from_end + 1]
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            from_end = cleaned.rfind("}", 0, from_end)
+
+    # Last resort: return the full thing for the error message
+    return cleaned[start:] if start >= 0 else cleaned
 
 
 def chat(

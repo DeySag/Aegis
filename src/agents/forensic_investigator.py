@@ -24,6 +24,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 MIN_LLM_CONFIDENCE = 0.7
 
+# Patterns that indicate an actual code vulnerability (not error handling or logging)
+UNSAFE_CALL_PATTERNS = [
+    "subprocess.run(", "subprocess.Popen(", "os.system(", "os.popen(",
+    "eval(", "exec(", "execfile(", "__import__(",
+    "shell=True",
+]
+
 # ── KNOWN SIMPLIFICATION (demo scope) ──────────────────────────
 # Currently hardcodes app.py as the only source file for review.
 # Future: use grep/AST to select files matching payload keywords,
@@ -50,8 +57,29 @@ def _llm_confidence_valid(report: ForensicReport) -> bool:
     return report.confidence >= MIN_LLM_CONFIDENCE
 
 
-def investigate_llm(alert: AlertEvent) -> ForensicReport | None:
-    config = LLMConfig()
+def _report_line_unsafe(report: ForensicReport) -> bool:
+    """Post-hoc check: the reported line (and 2 lines before/after) must contain
+    an unsafe call pattern.
+    Accepts minor line-offset variations that still point within the vulnerable block.
+    Rejects models that confidently point at error handlers or logging. """
+    try:
+        source_path = Path(report.file)
+        if not source_path.exists():
+            return False
+        lines = source_path.read_text(encoding="utf-8").splitlines()
+        if report.line < 1 or report.line > len(lines):
+            return False
+        # Check a window of [line-2 .. line+2]
+        start = max(0, report.line - 3)
+        end = min(len(lines), report.line + 2)
+        window = lines[start:end]
+        return any(p in "".join(window) for p in UNSAFE_CALL_PATTERNS)
+    except Exception:
+        return False
+
+
+def investigate_llm(alert: AlertEvent, config_override: LLMConfig | None = None) -> ForensicReport | None:
+    config = config_override or LLMConfig()
     if not config.configured:
         return None
 
@@ -83,10 +111,13 @@ def investigate_llm(alert: AlertEvent) -> ForensicReport | None:
         cleaned = extract_json(raw)
         data = json.loads(cleaned)
         report = ForensicReport.model_validate(data)
-        if _llm_confidence_valid(report):
+        if _llm_confidence_valid(report) and _report_line_unsafe(report):
             print(f"[Investigator] LLM result: {report.file}:{report.line} "
                   f"(conf={report.confidence})")
             return report
+        elif not _report_line_unsafe(report):
+            print(f"[Investigator] LLM reported line {report.line} has no unsafe call "
+                  f"pattern, falling back")
         else:
             print(f"[Investigator] LLM confidence {report.confidence} < "
                   f"{MIN_LLM_CONFIDENCE}, falling back")
@@ -168,16 +199,21 @@ def investigate_heuristic(alert: AlertEvent) -> ForensicReport:
     )
 
 
-def investigate(alert: AlertEvent | dict) -> ForensicReport:
+INVESTIGATOR_PATH_LLM = "llm"
+INVESTIGATOR_PATH_HEURISTIC = "heuristic"
+
+
+def investigate(alert: AlertEvent | dict) -> tuple[ForensicReport, str]:
     if isinstance(alert, dict):
         alert = AlertEvent.model_validate(alert)
 
     llm_report = investigate_llm(alert)
     if llm_report is not None:
-        return llm_report
+        print(f"[Investigator] Path: LLM (confidence={llm_report.confidence})")
+        return llm_report, INVESTIGATOR_PATH_LLM
 
-    print("[Investigator] Using heuristic fallback")
-    return investigate_heuristic(alert)
+    print("[Investigator] Path: heuristic fallback")
+    return investigate_heuristic(alert), INVESTIGATOR_PATH_HEURISTIC
 
 
 if __name__ == "__main__":
@@ -198,5 +234,6 @@ if __name__ == "__main__":
             )
         ],
     )
-    report = investigate(sample)
+    report, path = investigate(sample)
+    print(f"Path: {path}")
     print(report.model_dump_json(indent=2))

@@ -37,8 +37,9 @@ FIX_IMPORTS: dict[str, list[str]] = {
 }
 
 
-def _generate_patch_llm(report: ForensicReport, max_retries: int = 2) -> PatchProposal | None:
-    config = LLMConfig()
+def _generate_patch_llm(report: ForensicReport, max_retries: int = 2,
+                        config_override: LLMConfig | None = None) -> PatchProposal | None:
+    config = config_override or LLMConfig()
     if not config.configured:
         return None
 
@@ -99,15 +100,20 @@ def _generate_patch_llm(report: ForensicReport, max_retries: int = 2) -> PatchPr
     return None
 
 
-def generate_patch(report: ForensicReport | dict) -> PatchProposal:
+PATCH_PATH_LLM = "llm"
+PATCH_PATH_LOOKUP = "lookup"
+
+
+def generate_patch(report: ForensicReport | dict) -> tuple[PatchProposal, str]:
     if isinstance(report, dict):
         report = ForensicReport.model_validate(report)
 
     llm_patch = _generate_patch_llm(report)
     if llm_patch is not None:
-        return llm_patch
+        print(f"[PatchEngine] Path: LLM")
+        return llm_patch, PATCH_PATH_LLM
 
-    print("[PatchEngine] Using deterministic fallback")
+    print("[PatchEngine] Path: lookup fallback")
     vuln_key = report.vuln_type
     patch_code = SECURE_REPLACEMENTS.get(vuln_key)
     if not patch_code:
@@ -118,19 +124,22 @@ def generate_patch(report: ForensicReport | dict) -> PatchProposal:
 
     original_snippet = report.vulnerable_code.strip()
 
-    return PatchProposal(
-        patch_id=uuid.uuid4().hex[:12],
-        report_id=report.report_id,
-        created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        target_file=report.file,
-        target_line=report.line,
-        vuln_type=report.vuln_type,
-        original_code=original_snippet,
-        patch_code=patch_code,
-        rationale=(
-            f"Replaced unsafe shell=True invocation with safe "
-            f"shlex.split() based call to prevent command injection."
+    return (
+        PatchProposal(
+            patch_id=uuid.uuid4().hex[:12],
+            report_id=report.report_id,
+            created_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            target_file=report.file,
+            target_line=report.line,
+            vuln_type=report.vuln_type,
+            original_code=original_snippet,
+            patch_code=patch_code,
+            rationale=(
+                f"Replaced unsafe shell=True invocation with safe "
+                f"shlex.split() based call to prevent command injection."
+            ),
         ),
+        PATCH_PATH_LOOKUP,
     )
 
 
@@ -219,7 +228,8 @@ if __name__ == "__main__":
         confidence=0.95,
     )
 
-    patch = generate_patch(sample)
+    patch, path = generate_patch(sample)
+    print(f"Path: {path}")
     print("=== Patch Proposal ===")
     print(patch.model_dump_json(indent=2))
     ok, err = validate_patch_syntax(patch.patch_code)

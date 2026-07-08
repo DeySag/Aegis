@@ -35,6 +35,8 @@ def generate_patch_with_retry(
     report: ForensicReport | dict,
     max_retries: int = MAX_RETRIES,
 ) -> tuple[PatchProposal | None, list[str]]:
+    from src.agents.patch_engineer import PATCH_PATH_LLM, PATCH_PATH_LOOKUP
+
     logs: list[str] = []
     attempt = 0
     patch = None
@@ -42,14 +44,15 @@ def generate_patch_with_retry(
     while attempt <= max_retries:
         if attempt > 0:
             logs.append(f"[Retry {attempt}/{max_retries}] Regenerating patch...")
-            # Re-seed the report for a fresh generation
             report_copy = copy.deepcopy(report)
             if isinstance(report_copy, ForensicReport):
                 report_copy.vulnerable_code += (
                     f"\n# Previous attempt failed syntax check."
                 )
 
-        patch = generate_patch(report)
+        patch_obj, patch_path = generate_patch(report)
+        logs.append(f"[PatchEngine] Path: {patch_path}")
+        patch = patch_obj
         ok, error_msg = validate_patch_syntax(patch.patch_code)
 
         if ok:
@@ -61,7 +64,6 @@ def generate_patch_with_retry(
         )
 
         if attempt < max_retries:
-            # Modify the report to include error feedback
             if isinstance(report, dict):
                 report["vulnerable_code"] = (
                     report.get("vulnerable_code", "") +
@@ -90,15 +92,19 @@ def run_pipeline(
         "retry_logs": [],
         "applied": False,
         "test_passed": False,
+        "investigator_path": None,
+        "patch_path": None,
         "errors": [],
     }
 
     try:
-        report = investigate(alert)
+        report, inv_path = investigate(alert)
         result["alert_id"] = report.alert_id
         result["report"] = json.loads(serialize(report))
+        result["investigator_path"] = inv_path
         print(f"[Pipeline] Investigator -> report {report.report_id} "
-              f"(file={report.file}:{report.line}, conf={report.confidence})")
+              f"(file={report.file}:{report.line}, conf={report.confidence}, "
+              f"path={inv_path})")
     except Exception as e:
         result["errors"].append(f"Investigator failed: {e}")
         return result
@@ -114,7 +120,9 @@ def run_pipeline(
             return result
 
         result["patch"] = json.loads(serialize(patch))
-        print(f"[Pipeline] PatchEngine -> patch {patch.patch_id}")
+        patch_path = next((l.split("Path: ")[-1] for l in retry_logs if "Path: " in l), "unknown")
+        result["patch_path"] = patch_path
+        print(f"[Pipeline] PatchEngine -> patch {patch.patch_id} (path={patch_path})")
     except Exception as e:
         result["errors"].append(f"Patch generation failed: {e}")
         return result

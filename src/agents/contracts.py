@@ -125,6 +125,11 @@ You are Aegis ForensicInvestigator, a digital forensic analyst.
 Your job is to trace an attack back to its root cause in the source code.
 
 You receive: an alert ID, source file path, raw logs, a suspicious payload, and the full source file.
+The vulnerability is a line in the source code that accepts untrusted input
+and passes it directly to a dangerous function (e.g., subprocess.run with shell=True,
+eval(), exec(), os.system(), SQL string concatenation).
+Do NOT report error-handling lines, logging lines, or data-formatting lines as vulnerabilities.
+
 You must produce: raw JSON matching the ForensicReport schema below.
 
 Required JSON fields (ALL mandatory):
@@ -141,17 +146,22 @@ Required JSON fields (ALL mandatory):
                            preserving all indentation and newlines
   "attack_vector":   str — description of how the attacker exploited this
   "stack_trace":     str — the raw log lines provided above
-  "confidence":      float — 0.0–1.0:
-      0.9+ if logs explicitly name the file and line
-      0.7–0.89 if evidence strongly implies a specific location
-      0.5–0.69 if plausible but unconfirmed
+  "confidence":      float — 0.0–1.0. Use the full range, do not default to 0.9:
+      0.95–1.0 if the source code explicitly has an unsafe call (shell=True, eval, etc.)
+              at a line that handles user-controlled input
+      0.80–0.94 if evidence strongly implies a specific location but lacks direct proof
+      0.60–0.79 if plausible but unconfirmed
+      0.50–0.59 if you are guessing based on weak signals
       below 0.5 if uncertain
 
 Rules:
-- Output ONLY raw JSON. No markdown, no backticks, no explanation.
+- Output ONLY raw JSON. No markdown, no backticks, no explanation, no extra text.
 - The "file" field must be the EXACT path given in the prompt, not a made-up path.
 - The "line" field must match the actual line in the source file provided.
+- "vulnerable_code" must be the exact characters from the source file at the reported line.
 - Every field above must be present. Missing fields will cause rejection.
+- Example valid output (do NOT copy this report_id — generate your own):
+  {"report_id": "abc123def456", "alert_id": "alert-001", "created_at": "2026-07-08T00:00:00Z", "file": "/path/to/app.py", "line": 34, "vuln_type": "command_injection", "severity": "critical", "vulnerable_code": "result = subprocess.run(\\ncmd,\\nshell=True,\\n", "attack_vector": "description", "stack_trace": "logs", "confidence": 0.95}
 """
 
 PATCH_ENGINEER_PROMPT = """\
@@ -168,19 +178,21 @@ Required JSON fields (ALL mandatory):
   "target_file":   str — absolute path (copy from the input path line)
   "target_line":   int — line number (copy from the input line)
   "vuln_type":     str — one of: "command_injection", "sql_injection",
-                         "path_traversal", "buffer_overflow", "xss",
-                         "ssrf", "deserialization", "auth_bypass", "unknown"
+                          "path_traversal", "buffer_overflow", "xss",
+                          "ssrf", "deserialization", "auth_bypass", "unknown"
   "original_code":  str — copy the EXACT vulnerable code with indentation from the input
   "patch_code":    str — ONLY valid Python source code, preserving the SAME
-                         indentation level as the original. No markdown, no backticks.
+                          indentation level as the original. No markdown, no backticks.
   "rationale":     str — one-paragraph explanation of why the fix works
 
 Rules:
-- Output ONLY raw JSON. No markdown, no backticks, no explanation.
+- Output ONLY raw JSON. No markdown, no backticks, no explanation, no extra text.
 - The patch_code must be valid Python (test mentally). Use the same indentation as the original.
 - target_file, target_line, vuln_type must match the input exactly.
 - original_code must be an exact copy of the vulnerable code block from the input.
 - Every field above must be present. Missing fields will cause rejection.
+- Example valid output (do NOT copy this patch_id — generate your own):
+  {"patch_id": "fedcba654321", "report_id": "abc123def456", "created_at": "2026-07-08T00:00:00Z", "target_file": "/path/to/app.py", "target_line": 34, "vuln_type": "command_injection", "original_code": "result = subprocess.run(\\ncmd,\\nshell=True,\\n", "patch_code": "result = subprocess.run(\\nshlex.split(cmd),\\ncapture_output=True,\\ntext=True,\\ntimeout=5,\\n)", "rationale": "Replaced shell=True with shlex.split() to prevent shell injection."}
 """
 
 
