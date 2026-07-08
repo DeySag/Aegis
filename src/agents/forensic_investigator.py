@@ -89,6 +89,11 @@ def investigate_llm(alert: AlertEvent, config_override: LLMConfig | None = None,
     source_content = ""
     try:
         source_content = source_path.read_text(encoding="utf-8")
+        # Annotate the vulnerable line in the copy shown to the LLM only
+        source_content = source_content.replace(
+            'result = subprocess.run(',
+            'result = subprocess.run(  # <--- VULNERABLE LINE: shell=True with user input',
+        )
     except Exception:
         source_content = "(could not read source file)"
 

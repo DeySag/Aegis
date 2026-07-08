@@ -128,7 +128,12 @@ You receive: an alert ID, source file path, raw logs, a suspicious payload, and 
 The vulnerability is a line in the source code that accepts untrusted input
 and passes it directly to a dangerous function (e.g., subprocess.run with shell=True,
 eval(), exec(), os.system(), SQL string concatenation).
-Do NOT report error-handling lines, logging lines, or data-formatting lines as vulnerabilities.
+    Do NOT report error-handling lines, logging lines, or data-formatting lines as vulnerabilities.
+    Lines like "except subprocess.TimeoutExpired:" or "except Exception as e:" are error handlers.
+    If the source file has a try/except block and you see an "except" line that mentions
+    "subprocess", that is the EXCEPTION HANDLER, not the vulnerability. The vulnerability
+    is always the subprocess.run() call inside the try block that passes user-controlled
+    input with shell=True.
 
 You must produce: raw JSON matching the ForensicReport schema below.
 
