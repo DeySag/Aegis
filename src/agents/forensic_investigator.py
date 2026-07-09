@@ -58,6 +58,33 @@ def _llm_confidence_valid(report: ForensicReport) -> bool:
     return report.confidence >= MIN_LLM_CONFIDENCE
 
 
+def _correct_line_from_vuln_code(report: ForensicReport) -> int | None:
+    """Search source file for vulnerable_code and return its true 1-based line.
+    LLMs frequently miscount lines even when they correctly identify the vulnerable code.
+    This salvages those cases by matching the reported code block against disk content."""
+    try:
+        source_path = Path(report.file)
+        if not source_path.exists():
+            return None
+        content = source_path.read_text(encoding="utf-8")
+        needle = report.vulnerable_code.strip()
+        if not needle:
+            return None
+        # Multi-line substring match (needle appears verbatim in source)
+        if needle in content:
+            idx = content.index(needle)
+            return content[:idx].count("\n") + 1
+        # Single-line fallback: match the first line of vulnerable_code
+        first_line = needle.split("\n")[0].strip()
+        if first_line:
+            for i, line in enumerate(content.splitlines()):
+                if first_line in line.strip() or line.strip() in first_line:
+                    return i + 1
+        return None
+    except Exception:
+        return None
+
+
 def _report_line_unsafe(report: ForensicReport) -> bool:
     """Post-hoc check: the reported line (and 2 lines before/after) must contain
     an unsafe call pattern.
@@ -118,6 +145,11 @@ def investigate_llm(alert: AlertEvent, config_override: LLMConfig | None = None,
         cleaned = extract_json(raw)
         data = json.loads(cleaned)
         report = ForensicReport.model_validate(data)
+        corrected = _correct_line_from_vuln_code(report)
+        if corrected is not None and corrected != report.line:
+            print(f"[Investigator] Corrected line {report.line} -> {corrected} "
+                  f"(vulnerable_code match)")
+            report.line = corrected
         if _llm_confidence_valid(report) and _report_line_unsafe(report):
             print(f"[Investigator] LLM result: {report.file}:{report.line} "
                   f"(conf={report.confidence})")
