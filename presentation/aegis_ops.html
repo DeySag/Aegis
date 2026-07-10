@@ -291,6 +291,16 @@ function handleGpuEvent(data){
 
   if(data.util_hist) drawSparkFromArray(document.getElementById('utilSpark'), data.util_hist, 'rgb(111,214,201)', 100);
   if(data.tok_hist) drawSparkFromArray(document.getElementById('tokSpark'), data.tok_hist, 'rgb(184,146,255)', 260);
+
+  // Sync mock state so updateGpuMock doesn't override SSE values
+  vram = data.vram_gb;
+  util = data.util_pct;
+  tok = data.tok_per_s;
+  lat = data.latency_ms;
+  ttft = data.ttft_ms;
+  pow_ = data.power_w;
+  temp = data.temp_c;
+  vramMax = data.vram_max_gb || 48;
 }
 
 function drawSparkFromArray(canvas, hist, color, max){
@@ -564,7 +574,7 @@ async function mockLoop(){
 /* =========================================================================
    GPU PANEL — mock ROCm telemetry (used only when backend SSE is off)
    ========================================================================= */
-const vramMax = 24;
+let vramMax = 24;
 let vram = 9.2, util = 38, tok = 96, lat = 640, ttft = 210, pow_ = 142, temp = 58;
 const utilHist = new Array(40).fill(0);
 const tokHist = new Array(40).fill(0);
