@@ -139,6 +139,8 @@ async def gpu_telemetry_loop() -> None:
     """Periodically emit GPU metrics — real ROCm data when available, mock drift otherwise."""
     rocm_provider = None
     try:
+        import subprocess
+        subprocess.run(["rocm-smi", "--version"], capture_output=True, check=True)
         from scripts.benchmark_gpu import ROCmGPUProvider
         rocm_provider = ROCmGPUProvider()
         model_name = "Qwen/Qwen2.5-14B-Instruct"
