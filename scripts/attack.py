@@ -81,7 +81,14 @@ def main():
         default="auto",
         help="Target OS for payload selection (default: auto-detect)",
     )
+    parser.add_argument(
+        "--port", "-p",
+        type=int,
+        default=8000,
+        help="Sandbox port (default: 8000)",
+    )
     args = parser.parse_args()
+    TARGET = f"http://localhost:{args.port}"
 
     if args.target_os == "auto":
         detected = platform.system().lower()

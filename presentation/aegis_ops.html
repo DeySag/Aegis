@@ -271,8 +271,8 @@ function setCounts(){
 function handleGpuEvent(data){
   // Called with {"type":"gpu","vram_gb":9.2,"util_pct":38,"tok_per_s":96,
   //   "latency_ms":640,"ttft_ms":210,"power_w":142,"temp_c":58,
-  //   "model":"...","util_hist":[...],"tok_hist":[...],"vram_max_gb":24}
-  const vmax = data.vram_max_gb || 24;
+  //   "model":"...","util_hist":[...],"tok_hist":[...],"vram_max_gb":48}
+  const vmax = data.vram_max_gb || 48;
   const pct = data.vram_pct != null ? data.vram_pct : ((data.vram_gb / vmax) * 100);
 
   document.getElementById('vramVal').textContent = data.vram_gb.toFixed(1);
@@ -448,7 +448,7 @@ function connectBackend(){
     return;
   }
 
-  sse = new EventSource('/events');
+  sse = new EventSource('events');
   let connected = false;
 
   sse.onopen = () => {
