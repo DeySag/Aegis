@@ -56,7 +56,7 @@ VULN_SIGNATURES: list[dict[str, Any]] = [
         "vuln_type": VulnType.COMMAND_INJECTION,
         "payload_indicators": [
             "echo", "dir", "whoami", "ipconfig", "type", "cat", "ls", "ping",
-            "&&", "||", ";", "$(", "`", "AEGIS_BREACH_OK",
+            "&&", "||", ";", "$(", "`", "KAVACH_BREACH_OK",
         ],
         "attack_vector": "Unsanitized user input passed to subprocess.run() with shell=True enables arbitrary command execution.",
     },

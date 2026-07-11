@@ -1,11 +1,11 @@
-# Aegis — Autonomous Cybersecurity AI
+# KAVACH — Knowledge-driven Autonomous Vulnerability Assessment, Correction & Hardening
 
-An advanced AI-powered cybersecurity system built for AMD compute. Aegis provides continuous network surveillance, instant threat detection, digital forensic analysis, root-cause vulnerability mapping, and automated code patching — all running locally on air-gapped hardware.
+An advanced AI-powered cybersecurity system built for AMD compute. KAVACH provides continuous network surveillance, instant threat detection, digital forensic analysis, root-cause vulnerability mapping, and automated code patching — all running locally on air-gapped hardware.
 
 ## Architecture
 
 ```
-aegis/
+kavach/
 ├── src/
 │   ├── agents/                      # Multi-agent AI orchestration
 │   │   ├── config.py                #   LLM endpoint configuration (env vars)
@@ -22,7 +22,7 @@ aegis/
 ├── presentation/
 │   ├── index.html                   # Reveal.js presentation deck (11 slides)
 │   ├── demo_script.md               # Recordable demo script (~5 min)
-│   └── aegis_ops.html               # SOC-style live ops terminal dashboard
+│   └── kavach_ops.html               # SOC-style live ops terminal dashboard
 ├── scripts/
 │   ├── attack.py                    # Attack simulator (Win/Linux/iOS payloads)
 │   ├── stress_test_prompts.py       # Multi-model LLM stress test harness
@@ -60,21 +60,21 @@ cp .env.example .env
 ```
 4. Edit `.env` and paste your key:
 ```
-AEGIS_LLM_API_KEY=gsk_your_actual_key
+KAVACH_LLM_API_KEY=gsk_your_actual_key
 ```
 
 The pipeline auto-loads `.env` via `python-dotenv`. That's it.
 
 **Or set environment variables directly:**
 ```bash
-set AEGIS_LLM_API_KEY=gsk_...              # Windows
-export AEGIS_LLM_API_KEY=gsk_...           # Linux/macOS
+set KAVACH_LLM_API_KEY=gsk_...              # Windows
+export KAVACH_LLM_API_KEY=gsk_...           # Linux/macOS
 
-set AEGIS_LLM_ENDPOINT=https://api.groq.com/openai/v1   # default
-set AEGIS_LLM_MODEL=llama-3.3-70b-versatile             # default
+set KAVACH_LLM_ENDPOINT=https://api.groq.com/openai/v1   # default
+set KAVACH_LLM_MODEL=llama-3.3-70b-versatile             # default
 ```
 
-**Using a different provider:** point `AEGIS_LLM_ENDPOINT` at any OpenAI-compatible
+**Using a different provider:** point `KAVACH_LLM_ENDPOINT` at any OpenAI-compatible
 chat endpoint (Together, OpenAI, local ROCm server, etc.).
 
 ## Running the Sandbox (vulnerable)

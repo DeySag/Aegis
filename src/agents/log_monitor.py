@@ -47,7 +47,7 @@ SUSPICIOUS_RULES: list[tuple[str, re.Pattern]] = [
     ("subst_${}", re.compile(r"\$\{.*\}")),
     ("backtick", re.compile(r"`[^`]+`")),
     ("subst_$()", re.compile(r"\$\(.*\)")),
-    ("aegis_test", re.compile(r"AEGIS_BREACH_OK")),
+    ("kavach_test", re.compile(r"KAVACH_BREACH_OK")),
     ("loopback", re.compile(r"127\.0\.0\.1")),
     # sql injection
     ("sqli_quote", re.compile(r"'")),

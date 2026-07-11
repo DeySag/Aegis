@@ -6,7 +6,7 @@ from src.agents.contracts import AlertEvent, LogEntry, Severity
 from datetime import datetime, timezone
 
 payloads = [
-    ("echo AEGIS_BREACH_OK", "medium"),
+    ("echo KAVACH_BREACH_OK", "medium"),
     ("type C:\\Windows\\win.ini", "medium"),
     ("echo start && dir && echo end", "high"),
     ("ping -n 1 127.0.0.1", "medium"),

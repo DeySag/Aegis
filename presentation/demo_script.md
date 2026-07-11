@@ -1,4 +1,4 @@
-# Aegis Demo Script — Non-Hardware Segments
+# KAVACH Demo Script — Non-Hardware Segments
 
 Record these segments now. Only the GPU benchmark segment needs to wait for AMD hardware.
 
@@ -22,8 +22,8 @@ git checkout src/sandbox_target/app.py
 **Visual**: Terminal showing attack payloads hitting `/execute`
 
 ```
-> curl "http://localhost:8000/execute?cmd=echo%20AEGIS_BREACH_OK"
-→ {"cmd": "echo AEGIS_BREACH_OK", "output": "AEGIS_BREACH_OK\n", ...}
+> curl "http://localhost:8000/execute?cmd=echo%20KAVACH_BREACH_OK"
+→ {"cmd": "echo KAVACH_BREACH_OK", "output": "KAVACH_BREACH_OK\n", ...}
 
 > curl "http://localhost:8000/execute?cmd=dir%20src"
 → {"cmd": "dir src", "output": " Volume in drive C ...", ...}
@@ -47,7 +47,7 @@ An attacker can read files, run recon, or pivot to other systems."*
 ```
 cat data/logs/traffic.log
 
-2026-07-08 12:00:01 | EXECUTE request: cmd='echo AEGIS_BREACH_OK'
+2026-07-08 12:00:01 | EXECUTE request: cmd='echo KAVACH_BREACH_OK'
 2026-07-08 12:00:02 | EXECUTE request: cmd='dir src'
 2026-07-08 12:00:03 | EXECUTE request: cmd='whoami'
 ```
@@ -66,8 +66,8 @@ python -m src.agents.log_monitor
 
 [LogMonitor] Alert: a1b2c3d4e5f6
   endpoint: /execute
-  payload: "echo AEGIS_BREACH_OK"
-  indicators: ['echo', 'AEGIS_BREACH_OK']
+  payload: "echo KAVACH_BREACH_OK"
+  indicators: ['echo', 'KAVACH_BREACH_OK']
   severity: HIGH
 ```
 
@@ -146,7 +146,7 @@ with Python's AST parser before it ever touches the file system."*
 ```
 python src/sandbox_target/harness.py
 
-=== Aegis Sandbox Test Harness ===
+=== KAVACH Sandbox Test Harness ===
 Sandbox started at http://127.0.0.1:54321
   OK: exploit_echo blocked (no output)
   OK: exploit_dir blocked (no output)
@@ -197,7 +197,7 @@ in under 30 seconds."*
 
 ```
 # Set an invalid model to force all LLM calls to fail
-set AEGIS_LLM_MODEL=nonexistent-model
+set KAVACH_LLM_MODEL=nonexistent-model
 
 python -c "result = run_pipeline(alert, apply=False)"
 
@@ -246,7 +246,7 @@ validation as a safety net."*
 ```
 python scripts/benchmark_gpu.py --provider mock
 
-Aegis GPU Benchmark Report
+KAVACH GPU Benchmark Report
 ── GPU Metrics ──
   GPU:            AMD Instinct MI250 (MOCK)
   VRAM Total:     65536 MB

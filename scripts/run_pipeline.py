@@ -1,5 +1,5 @@
 """
-Run the Aegis investigate -> patch -> apply -> test pipeline from the CLI.
+Run the KAVACH investigate -> patch -> apply -> test pipeline from the CLI.
 
 Usage:
     python scripts/run_pipeline.py --vuln command_injection
@@ -37,12 +37,12 @@ DEFAULTS = {
 def build_deserialization_payload() -> str:
     class _EchoMarker:
         def __reduce__(self):
-            return (os.system, ("echo AEGIS_TEST_HARNESS",))
+            return (os.system, ("echo KAVACH_TEST_HARNESS",))
     return base64.b64encode(pickle.dumps(_EchoMarker())).decode()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the Aegis pipeline once against a chosen vuln type.")
+    parser = argparse.ArgumentParser(description="Run the KAVACH pipeline once against a chosen vuln type.")
     parser.add_argument("--vuln", "-v", required=True, choices=list(DEFAULTS.keys()),
                          help="Which vulnerability class to simulate an alert for.")
     parser.add_argument("--payload", "-p", default=None,

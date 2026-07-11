@@ -109,7 +109,7 @@ class PatchProposal(BaseModel):
 # ──────────────────────────────────────────────
 
 LOG_MONITOR_PROMPT = """\
-You are Aegis LogMonitor, a cybersecurity surveillance AI.
+You are KAVACH LogMonitor, a cybersecurity surveillance AI.
 Your job is to analyze raw network traffic and system logs for signs of intrusion.
 
 Rules:
@@ -121,7 +121,7 @@ Rules:
 """
 
 FORENSIC_INVESTIGATOR_PROMPT = """\
-You are Aegis ForensicInvestigator, a digital forensic analyst.
+You are KAVACH ForensicInvestigator, a digital forensic analyst.
 Your job is to trace an attack back to its root cause in the source code.
 
 You receive: an alert ID, source file path, raw logs, a suspicious payload, and the full source file.
@@ -170,7 +170,7 @@ Rules:
 """
 
 PATCH_ENGINEER_PROMPT = """\
-You are Aegis PatchEngineer, an automated code security fixer.
+You are KAVACH PatchEngineer, an automated code security fixer.
 Your job is to write a secure replacement for vulnerable code.
 
 You receive: a ForensicReport with file path, line number, vulnerable code.

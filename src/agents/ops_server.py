@@ -1,8 +1,8 @@
 """
-Aegis Live Ops Server
+KAVACH Live Ops Server
 
 Provides a real-time SSE feed of pipeline execution events to the
-aegis_ops.html dashboard. Run alongside the sandbox target.
+kavach_ops.html dashboard. Run alongside the sandbox target.
 
 Usage:
     uvicorn src.agents.ops_server:ops_app --port 3000 --reload
@@ -37,9 +37,9 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from src.agents.log_monitor import tail_log
 from src.agents.pipeline import run_pipeline
 
-ops_app = FastAPI(title="Aegis Live Ops")
+ops_app = FastAPI(title="KAVACH Live Ops")
 
-HTML_PATH = _proj / "presentation" / "aegis_ops.html"
+HTML_PATH = _proj / "presentation" / "kavach_ops.html"
 
 # ── SSE event bus ─────────────────────────────────────────
 
@@ -73,7 +73,7 @@ def emit_error(message: str) -> None:
 @ops_app.get("/")
 async def index():
     if not HTML_PATH.exists():
-        return HTMLResponse("<h1>Aegis Ops</h1><p>aegis_ops.html not found</p>", status_code=404)
+        return HTMLResponse("<h1>KAVACH Ops</h1><p>kavach_ops.html not found</p>", status_code=404)
     html = HTML_PATH.read_text(encoding="utf-8")
     return HTMLResponse(html)
 
@@ -174,7 +174,7 @@ async def gpu_telemetry_loop() -> None:
     ROCmGPUProvider can talk to hardware; deterministic mock drift
     otherwise, so the panel is never blank."""
     provider = _load_gpu_provider()
-    model_name = os.environ.get("AEGIS_LLM_MODEL", "unknown-model")
+    model_name = os.environ.get("KAVACH_LLM_MODEL", "unknown-model")
 
     # token-throughput / latency aren't exposed by rocm-smi (that's an
     # inference-server metric, not a GPU metric) — track a lightweight

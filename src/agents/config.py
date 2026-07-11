@@ -17,16 +17,16 @@ if _env_path.exists():
 class LLMConfig:
     endpoint: str = field(
         default_factory=lambda: os.getenv(
-            "AEGIS_LLM_ENDPOINT",
+            "KAVACH_LLM_ENDPOINT",
             "https://api.groq.com/openai/v1",
         )
     )
     api_key: str = field(
-        default_factory=lambda: os.getenv("AEGIS_LLM_API_KEY", "")
+        default_factory=lambda: os.getenv("KAVACH_LLM_API_KEY", "")
     )
     model: str = field(
         default_factory=lambda: os.getenv(
-            "AEGIS_LLM_MODEL", "llama-3.3-70b-versatile"
+            "KAVACH_LLM_MODEL", "llama-3.3-70b-versatile"
         )
     )
     timeout: int = 30

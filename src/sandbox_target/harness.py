@@ -23,7 +23,7 @@ class _EchoMarker:
     our own isolated sandbox copy — never against a real target."""
 
     def __reduce__(self):
-        return (os.system, ("echo AEGIS_TEST_HARNESS",))
+        return (os.system, ("echo KAVACH_TEST_HARNESS",))
 
 
 def _endpoint_config(vuln_type: str, port: int) -> tuple[str, str, list[tuple[str, str]]]:
@@ -63,8 +63,8 @@ def _endpoint_config(vuln_type: str, port: int) -> tuple[str, str, list[tuple[st
     # host OS — unlike bare "echo"/"dir", which are real standalone
     # executables on Linux and would "succeed" even after a correct patch.
     return "/execute", "cmd", [
-        ("exploit_chain_semicolon", "; echo AEGIS_TEST_HARNESS"),
-        ("benign_echo", "echo AEGIS_TEST_HARNESS"),
+        ("exploit_chain_semicolon", "; echo KAVACH_TEST_HARNESS"),
+        ("benign_echo", "echo KAVACH_TEST_HARNESS"),
     ]
 
 
@@ -130,7 +130,7 @@ def run_sandbox_test(
     }
 
     try:
-        tmpdir = Path(tempfile.mkdtemp(prefix="aegis_harness_"))
+        tmpdir = Path(tempfile.mkdtemp(prefix="kavach_harness_"))
         shutil.copytree(sandbox_src, str(tmpdir / "sandbox_target"), dirs_exist_ok=True)
         shutil.copytree(str(_proj / "src"), str(tmpdir / "src"), dirs_exist_ok=True)
 
@@ -221,7 +221,7 @@ def run_sandbox_test(
 
 
 if __name__ == "__main__":
-    print("=== Aegis Sandbox Test Harness ===")
+    print("=== KAVACH Sandbox Test Harness ===")
     res = run_sandbox_test()
     print(f"\nTest {'PASSED' if res['passed'] else 'FAILED'}")
     print(f"Port: {res['port']}")

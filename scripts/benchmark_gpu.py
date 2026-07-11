@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-GPU Benchmarking Suite for Aegis.
+GPU Benchmarking Suite for KAVACH.
 
 Captures VRAM, tokens/sec, and latency for LLM inference.
 Abstract provider pattern — works with mock data now, swap in real ROCm later.
@@ -289,7 +289,7 @@ def run_benchmark(provider_name: str = "mock", model_name: str = "llama-3.3-70b-
 
 def print_report(run: BenchmarkRun):
     print(f"\n{'='*50}")
-    print(f"Aegis GPU Benchmark Report")
+    print(f"KAVACH GPU Benchmark Report")
     print(f"{'='*50}")
     print(f"Timestamp:  {run.timestamp}")
     print(f"Provider:   {run.provider}")
@@ -319,7 +319,7 @@ def print_report(run: BenchmarkRun):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Aegis GPU Benchmarking Suite")
+    parser = argparse.ArgumentParser(description="KAVACH GPU Benchmarking Suite")
     parser.add_argument("--provider", choices=list(PROVIDERS.keys()), default="mock",
                         help="GPU provider (default: mock)")
     parser.add_argument("--model", default="llama-3.3-70b-versatile",

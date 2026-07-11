@@ -50,8 +50,8 @@ def chat(
 
     if not config.configured:
         raise RuntimeError(
-            "LLM not configured: set AEGIS_LLM_API_KEY (and optionally "
-            "AEGIS_LLM_ENDPOINT / AEGIS_LLM_MODEL)"
+            "LLM not configured: set KAVACH_LLM_API_KEY (and optionally "
+            "KAVACH_LLM_ENDPOINT / KAVACH_LLM_MODEL)"
         )
 
     url = f"{config.endpoint.rstrip('/')}/chat/completions"

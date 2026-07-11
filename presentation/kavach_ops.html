@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AEGIS // LIVE OPS</title>
+<title>KAVACH // LIVE OPS</title>
 <style>
   :root{
     --bg:            #0a0d0c;
@@ -168,7 +168,7 @@
 <div class="app">
   <div class="topbar">
     <div class="brand">
-      <span class="mark">AEGIS</span><span class="sub">// LIVE OPS &nbsp;·&nbsp; self-healing threat response</span>
+      <span class="mark">KAVACH</span><span class="sub">// LIVE OPS &nbsp;·&nbsp; self-healing threat response</span>
     </div>
     <div class="status-cluster">
       <span><span class="dot"></span><b id="statusText">MONITORING</b></span>
@@ -227,7 +227,7 @@
 
 <script>
 /* =========================================================================
-   AEGIS LIVE OPS — FRONTEND ENGINE
+   KAVACH LIVE OPS — FRONTEND ENGINE
    =========================================================================
    Connects to backend SSE at /events for real pipeline data.
    Falls back to scripted mock data if backend is unavailable.
@@ -464,7 +464,7 @@ function connectBackend(){
   sse.onopen = () => {
     connected = true;
     mockRunning = false;
-    logLine(`<span class="tag tag-sys">[SYS]</span> connected to Aegis Ops Server <span class="dim">— real-time pipeline feed</span>`);
+    logLine(`<span class="tag tag-sys">[SYS]</span> connected to KAVACH Ops Server <span class="dim">— real-time pipeline feed</span>`);
   };
 
   sse.onmessage = (e) => {
