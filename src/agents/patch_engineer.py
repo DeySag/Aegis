@@ -1,5 +1,6 @@
 import ast
 import json
+import os
 import shutil
 import sys
 import textwrap
@@ -31,11 +32,37 @@ SECURE_REPLACEMENTS: dict[str, str] = {
         "            timeout=5,\n"
         "        )"
     ),
+    VulnType.SQL_INJECTION: (
+        "        cur.execute(\n"
+        "            \"SELECT id, name, role FROM users WHERE name = ?\",\n"
+        "            (name,),\n"
+        "        )"
+    ),
+    VulnType.PATH_TRAVERSAL: (
+        "        target = (REPORTS_DIR / file).resolve()\n"
+        "        if REPORTS_DIR.resolve() not in target.parents and target != REPORTS_DIR.resolve():\n"
+        "            raise ValueError(\"path escapes REPORTS_DIR\")"
+    ),
+    VulnType.DESERIALIZATION: (
+        "        obj = json.loads(raw.decode(\"utf-8\"))"
+    ),
+    VulnType.SSRF: (
+        "        parsed = urlparse(url)\n"
+        "        if parsed.hostname not in ALLOWED_WEBHOOK_HOSTS:\n"
+        "            raise ValueError(\"host not in webhook allowlist\")\n"
+        "        resp = requests.get(url, timeout=3)"
+    ),
 }
 
 FIX_IMPORTS: dict[str, list[str]] = {
     VulnType.COMMAND_INJECTION: ["import shlex"],
+    VulnType.SQL_INJECTION: [],
+    VulnType.PATH_TRAVERSAL: [],
+    VulnType.DESERIALIZATION: ["import json"],
+    VulnType.SSRF: ["from urllib.parse import urlparse"],
 }
+# Note: the SSRF fallback patch references ALLOWED_WEBHOOK_HOSTS, which is
+# already defined as a module-level constant in sandbox_target/app.py.
 
 
 def _generate_patch_llm(report: ForensicReport, max_retries: int = 2,
@@ -234,7 +261,7 @@ if __name__ == "__main__":
         alert_id="alert-001",
         created_at="2026-07-08T00:00:00Z",
         file=str(_proj / "src" / "sandbox_target" / "app.py"),
-        line=34,
+        line=68,
         vuln_type=VulnType.COMMAND_INJECTION,
         severity="critical",
         vulnerable_code=(

@@ -139,29 +139,23 @@ class ROCmGPUProvider(GPUProvider):
 
     def collect_gpu_metrics(self) -> GPUMetrics:
         output = self._run_rocm_smi("--showmeminfo", "vram", "--showuse", "--showtemp", "--showpower")
+        # Parse rocm-smi output — format varies by version
         metrics = GPUMetrics(gpu_name="AMD GPU (rocm-smi)")
         for line in output:
-            line = line.strip()
-            if not line or line.startswith("==") or line.startswith("== "):
-                continue
-            if line.startswith("GPU["):
-                _, _, rest = line.partition(": ")
-                line = rest.strip()
-            parts = line.split(":")
+            parts = line.strip().split(":")
             if len(parts) < 2:
                 continue
-            key = parts[0].strip()
-            val = parts[-1].strip()
-            if "VRAM Total Memory" in key and "Used" not in key:
-                metrics.vram_total_mb = round(float(val) / (1024 * 1024), 1)
-            elif "VRAM Total Used Memory" in key:
-                metrics.vram_used_mb = round(float(val) / (1024 * 1024), 1)
+            key, val = parts[0].strip(), parts[1].strip()
+            if "VRAM Total" in key:
+                metrics.vram_total_mb = self._parse_mb(val)
+            elif "VRAM Used" in key:
+                metrics.vram_used_mb = self._parse_mb(val)
             elif "GPU use" in key:
-                metrics.gpu_util_pct = float(val.replace("%", ""))
-            elif "Temperature (Sensor edge)" in key:
-                metrics.temperature_c = float(val.replace("C", "").strip())
-            elif "Average Graphics Package Power" in key:
-                metrics.power_watts = float(val.replace("W", "").strip())
+                metrics.gpu_util_pct = self._parse_pct(val)
+            elif "Temperature" in key:
+                metrics.temperature_c = self._parse_temp(val)
+            elif "Power" in key:
+                metrics.power_watts = self._parse_power(val)
         metrics.vram_free_mb = metrics.vram_total_mb - metrics.vram_used_mb
         if metrics.vram_total_mb > 0:
             metrics.vram_util_pct = round((metrics.vram_used_mb / metrics.vram_total_mb) * 100, 1)

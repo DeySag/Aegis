@@ -1,5 +1,7 @@
+import base64
 import json
 import os
+import pickle
 import shutil
 import socket
 import subprocess
@@ -8,10 +10,80 @@ import tempfile
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
 from pathlib import Path
 from typing import Any
 
 _proj = Path(__file__).resolve().parents[2]
+
+
+class _EchoMarker:
+    """Standard pickle __reduce__ demo gadget: unpickling this runs a
+    harmless echo. Used only to prove/disprove RCE via pickle.loads() on
+    our own isolated sandbox copy — never against a real target."""
+
+    def __reduce__(self):
+        return (os.system, ("echo AEGIS_TEST_HARNESS",))
+
+
+def _endpoint_config(vuln_type: str, port: int) -> tuple[str, str, list[tuple[str, str]]]:
+    """Return (endpoint, query_param, default [(name, payload), ...]) for a
+    given vuln_type. Payload names starting with 'exploit_' are expected to
+    be blocked after a correct patch; 'benign_' payloads must keep working."""
+    if vuln_type == "sql_injection":
+        return "/search", "name", [
+            ("benign_lookup", "alice"),
+            ("benign_miss", "nonexistent_user"),
+            ("exploit_or_tautology", "nonexistent' OR '1'='1' --"),
+        ]
+    if vuln_type == "path_traversal":
+        # One "../" escapes reports/ into sandbox_target/ itself — stable
+        # across both a direct run and this harness's isolated temp copy.
+        return "/download", "file", [
+            ("benign_report", "q3_summary.txt"),
+            ("exploit_traverse_source", "../app.py"),
+        ]
+    if vuln_type == "deserialization":
+        exploit_token = base64.b64encode(pickle.dumps(_EchoMarker())).decode()
+        benign_token = base64.b64encode(json.dumps({"user": "alice"}).encode()).decode()
+        return "/session", "token", [
+            ("benign_session", benign_token),
+            ("exploit_pickle_rce", exploit_token),
+        ]
+    if vuln_type == "ssrf":
+        return "/webhook", "url", [
+            ("benign_self_ping", f"http://127.0.0.1:{port}/ping"),
+            ("exploit_hostname_bypass", f"http://localhost:{port}/ping"),
+        ]
+    # default: command_injection
+    # A leading ";" only works as chaining if the shell interprets it; once
+    # shlex.split() removes shell=True, ";" becomes argv[0] of a
+    # nonexistent program, so this cleanly distinguishes "still vulnerable"
+    # (echo runs, chained) from "patched" (FileNotFoundError) regardless of
+    # host OS — unlike bare "echo"/"dir", which are real standalone
+    # executables on Linux and would "succeed" even after a correct patch.
+    return "/execute", "cmd", [
+        ("exploit_chain_semicolon", "; echo AEGIS_TEST_HARNESS"),
+        ("benign_echo", "echo AEGIS_TEST_HARNESS"),
+    ]
+
+
+def _is_exploitable(vuln_type: str, name: str, data: dict) -> bool:
+    if not name.startswith("exploit_"):
+        return False
+    if vuln_type == "sql_injection":
+        return len(data.get("results", []) or []) > 0
+    if vuln_type == "path_traversal":
+        content = data.get("content", "") or ""
+        return data.get("error") is None and bool(content.strip())
+    if vuln_type == "deserialization":
+        return data.get("error") is None
+    if vuln_type == "ssrf":
+        return data.get("status") == 200
+    # command_injection
+    output = data.get("output", "") or ""
+    is_error = output.startswith("[ERROR]") or output.startswith("[TIMEOUT]")
+    return bool(output.strip()) and not is_error
 
 
 def find_free_port() -> int:
@@ -37,6 +109,7 @@ def run_sandbox_test(
     sandbox_src: str | None = None,
     port: int | None = None,
     attack_payloads: list[tuple[str, str]] | None = None,
+    vuln_type: str = "command_injection",
 ) -> dict[str, Any]:
     if sandbox_src is None:
         sandbox_src = str(_proj / "src" / "sandbox_target")
@@ -84,43 +157,41 @@ def run_sandbox_test(
 
         result["details"].append(f"Sandbox started at {url}")
 
+        endpoint, param, default_payloads = _endpoint_config(vuln_type, port)
         if attack_payloads is None:
-            attack_payloads = [
-                ("exploit_echo", "echo AEGIS_TEST_HARNESS"),
-                ("exploit_dir", "dir"),
-                ("benign_ping", "ping 127.0.0.1 -n 1"),
-            ]
+            attack_payloads = default_payloads
+        result["endpoint"] = endpoint
+        result["vuln_type"] = vuln_type
 
         exploitable_count = 0
         for name, payload in attack_payloads:
             try:
-                encoded = payload.replace(" ", "%20")
+                encoded = urllib.parse.quote(payload)
                 req = urllib.request.urlopen(
-                    f"{url}/execute?cmd={encoded}", timeout=5
+                    f"{url}{endpoint}?{param}={encoded}", timeout=5
                 )
                 data = json.loads(req.read().decode())
-                output = data.get("output", "")
-                has_output = bool(output.strip())
 
                 is_exploit = name.startswith("exploit_")
-                is_error = output.startswith("[ERROR]") or output.startswith("[TIMEOUT]")
-                if is_exploit and (not has_output or is_error):
+                exploitable = _is_exploitable(vuln_type, name, data)
+                # "has_response" is a rough proxy for "the request produced
+                # something" — used only to flag suspicious no-op benign calls.
+                has_response = any(
+                    bool(v) for k, v in data.items()
+                    if k not in ("error", "status_code") and v not in (None, "")
+                )
+
+                if is_exploit and exploitable:
                     result["details"].append(
-                        f"  OK: {name} blocked (no output or error)"
-                    )
-                elif is_exploit and has_output:
-                    result["details"].append(
-                        f"  WARN: {name} produced output: {output[:80]}"
+                        f"  WARN: {name} succeeded: {str(data)[:120]}"
                     )
                     exploitable_count += 1
-                elif not is_exploit and has_output:
-                    result["details"].append(
-                        f"  OK: {name} allowed (has output)"
-                    )
+                elif is_exploit and not exploitable:
+                    result["details"].append(f"  OK: {name} blocked")
+                elif not is_exploit and has_response:
+                    result["details"].append(f"  OK: {name} allowed (has response)")
                 else:
-                    result["details"].append(
-                        f"  WARN: {name} had no output"
-                    )
+                    result["details"].append(f"  WARN: {name} had no response")
             except Exception as e:
                 result["details"].append(f"  ERROR: {name} failed: {e}")
                 result["errors"].append(str(e))

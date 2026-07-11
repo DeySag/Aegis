@@ -30,6 +30,14 @@ UNSAFE_CALL_PATTERNS = [
     "subprocess.run(", "subprocess.Popen(", "os.system(", "os.popen(",
     "eval(", "exec(", "execfile(", "__import__(",
     "shell=True",
+    # SQL injection: f-string / % / + concatenation fed straight into cursor.execute()
+    'f"SELECT', "f'SELECT",
+    # Path traversal: user-controlled path built without containment check
+    "REPORTS_DIR / file",
+    # Insecure deserialization
+    "pickle.loads(",
+    # SSRF: unrestricted server-side outbound request
+    "requests.get(url",
 ]
 
 # ── KNOWN SIMPLIFICATION (demo scope) ──────────────────────────
@@ -42,7 +50,8 @@ SOURCE_FILE = "src/sandbox_target/app.py"
 VULN_SIGNATURES: list[dict[str, Any]] = [
     {
         "file": "src/sandbox_target/app.py",
-        "line": 34,
+        "endpoint": "/execute",
+        "line": 68,
         "code": "result = subprocess.run(\n            cmd,\n            shell=True,\n",
         "vuln_type": VulnType.COMMAND_INJECTION,
         "payload_indicators": [
@@ -50,6 +59,52 @@ VULN_SIGNATURES: list[dict[str, Any]] = [
             "&&", "||", ";", "$(", "`", "AEGIS_BREACH_OK",
         ],
         "attack_vector": "Unsanitized user input passed to subprocess.run() with shell=True enables arbitrary command execution.",
+    },
+    {
+        "file": "src/sandbox_target/app.py",
+        "endpoint": "/search",
+        "line": 99,
+        "code": 'cur.execute(\n            f"SELECT id, name, role FROM users WHERE name = \'{name}\'"\n        )\n',
+        "vuln_type": VulnType.SQL_INJECTION,
+        "payload_indicators": [
+            "'", "--", " or ", "union select", "1=1", "drop table",
+            "sqlite_master", "' or '1'='1",
+        ],
+        "attack_vector": "User-controlled 'name' parameter is concatenated directly into a SQL string passed to cur.execute(), allowing query structure to be altered (classic SQL injection).",
+    },
+    {
+        "file": "src/sandbox_target/app.py",
+        "endpoint": "/download",
+        "line": 116,
+        "code": "target = REPORTS_DIR / file\n",
+        "vuln_type": VulnType.PATH_TRAVERSAL,
+        "payload_indicators": [
+            "..", "..%2f", "..%5c", "/etc/", "\\windows\\", "%2e%2e",
+        ],
+        "attack_vector": "User-controlled 'file' parameter is joined onto REPORTS_DIR with no containment check, allowing '../' sequences to escape the intended directory and read arbitrary files.",
+    },
+    {
+        "file": "src/sandbox_target/app.py",
+        "endpoint": "/session",
+        "line": 132,
+        "code": "obj = pickle.loads(raw)\n",
+        "vuln_type": VulnType.DESERIALIZATION,
+        "payload_indicators": [
+            "gasv", "cos\nsystem", "gasystem", "reduce", "__reduce__",
+        ],
+        "attack_vector": "The 'token' query parameter is base64-decoded and passed directly to pickle.loads(), which executes arbitrary code embedded in a crafted pickle stream (insecure deserialization / RCE).",
+    },
+    {
+        "file": "src/sandbox_target/app.py",
+        "endpoint": "/webhook",
+        "line": 148,
+        "code": "resp = requests.get(url, timeout=3)\n",
+        "vuln_type": VulnType.SSRF,
+        "payload_indicators": [
+            "169.254.169.254", "localhost", "127.0.0.1", "file://", "0.0.0.0",
+            "metadata", "internal",
+        ],
+        "attack_vector": "User-controlled 'url' parameter is fetched server-side with no allowlist/denylist, letting an attacker make the server issue requests to internal or cloud-metadata endpoints (SSRF).",
     },
 ]
 
@@ -116,11 +171,32 @@ def investigate_llm(alert: AlertEvent, config_override: LLMConfig | None = None,
     source_content = ""
     try:
         source_content = source_path.read_text(encoding="utf-8")
-        # Annotate the vulnerable line in the copy shown to the LLM only
-        source_content = source_content.replace(
-            '        result = subprocess.run(',
-            '        # Endpoint passes user-controlled cmd directly into subprocess.run with shell=True\n        result = subprocess.run(',
-        )
+        # Annotate each known-vulnerable call in the copy shown to the LLM only.
+        # The real file on disk is never touched here.
+        annotations = [
+            (
+                '        result = subprocess.run(',
+                '        # Endpoint passes user-controlled cmd directly into subprocess.run with shell=True\n        result = subprocess.run(',
+            ),
+            (
+                '        cur.execute(\n            f"SELECT id, name, role FROM users WHERE name = \'{name}\'"',
+                '        # User-controlled name is concatenated directly into the SQL string\n        cur.execute(\n            f"SELECT id, name, role FROM users WHERE name = \'{name}\'"',
+            ),
+            (
+                '        target = REPORTS_DIR / file',
+                '        # User-controlled file path is joined with no containment check\n        target = REPORTS_DIR / file',
+            ),
+            (
+                '        obj = pickle.loads(raw)',
+                '        # Untrusted, attacker-controlled bytes are deserialized here\n        obj = pickle.loads(raw)',
+            ),
+            (
+                '        resp = requests.get(url, timeout=3)',
+                '        # User-controlled url is fetched server-side with no allowlist\n        resp = requests.get(url, timeout=3)',
+            ),
+        ]
+        for needle, replacement in annotations:
+            source_content = source_content.replace(needle, replacement)
     except Exception:
         source_content = "(could not read source file)"
 
@@ -186,7 +262,17 @@ def investigate_llm(alert: AlertEvent, config_override: LLMConfig | None = None,
     return None
 
 
-def locate_vulnerability(payload: str) -> dict[str, Any] | None:
+def locate_vulnerability(payload: str, endpoint: str | None = None) -> dict[str, Any] | None:
+    # Endpoint routing is far more reliable than keyword sniffing — payload
+    # keywords can collide across vuln classes (e.g. a URL ending in
+    # "/ping" contains the command-injection indicator "ping"). Since
+    # log_monitor.py always sets alert.endpoint correctly per-route, prefer
+    # it whenever available.
+    if endpoint:
+        for sig in VULN_SIGNATURES:
+            if sig.get("endpoint") == endpoint:
+                return sig
+
     payload_lower = payload.lower()
     for sig in VULN_SIGNATURES:
         for ind in sig["payload_indicators"]:
@@ -205,7 +291,13 @@ def extract_stack_trace_fragment(logs: list[Any]) -> str:
 
 def investigate_heuristic(alert: AlertEvent) -> ForensicReport:
     payload = alert.payload or ""
-    sig = locate_vulnerability(payload)
+    sig = locate_vulnerability(payload, endpoint=alert.endpoint)
+    if sig is None:
+        raise ValueError(
+            f"Heuristic fallback found no matching VULN_SIGNATURES entry for "
+            f"endpoint={alert.endpoint!r} payload={payload[:80]!r}. "
+            f"Add a signature for this endpoint or check payload_indicators."
+        )
 
     file_path = str(PROJECT_ROOT / sig["file"])
     line_num = sig["line"]

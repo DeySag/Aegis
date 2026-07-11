@@ -32,6 +32,17 @@ from src.sandbox_target.harness import run_sandbox_test
 MAX_RETRIES = 2
 
 # ── Source file snapshot for clean-baseline patching ──────
+#
+# IMPORTANT: snapshots are read from a checked-in `<file>.pristine` copy,
+# NOT lazily captured from whatever's on disk at first call. The old lazy
+# approach broke across server restarts: if app.py already had a patch
+# applied (from a previous run) when the server started, that ALREADY-
+# PATCHED version got captured as the "clean" baseline. The next alert
+# would then apply a patch whose target line numbers assume the ORIGINAL
+# file layout — but against an already-shifted file — corrupting it
+# (typically a mismatched-paren SyntaxError showing up far from the
+# actual edit point, since Python only notices the imbalance once it
+# hits something that can't continue the broken expression).
 
 _source_snapshots: dict[str, str] = {}
 _SOURCE_FILES = ["src/sandbox_target/app.py"]
@@ -40,7 +51,13 @@ _SOURCE_FILES = ["src/sandbox_target/app.py"]
 def _capture_snapshots() -> None:
     for rel in _SOURCE_FILES:
         p = _proj / rel
-        if p.exists():
+        pristine = _proj / f"{rel}.pristine"
+        if pristine.exists():
+            _source_snapshots[rel] = pristine.read_text(encoding="utf-8")
+        elif p.exists():
+            # No pristine copy shipped — fall back to whatever's on disk
+            # now (old behavior). Only correct if this is truly the first
+            # time the file has ever been patched.
             _source_snapshots[rel] = p.read_text(encoding="utf-8")
 
 
@@ -213,7 +230,7 @@ def run_pipeline(
 
     if test and result["applied"]:
         try:
-            test_result = run_sandbox_test()
+            test_result = run_sandbox_test(vuln_type=report.vuln_type.value)
             result["test_passed"] = test_result.get("passed", False)
             print(f"[Pipeline] Sandbox test: {'PASSED' if result['test_passed'] else 'FAILED'}")
             if on_event:
